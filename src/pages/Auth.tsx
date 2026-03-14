@@ -62,7 +62,8 @@ const Auth: React.FC = () => {
                     password,
                     options: {
                         data: {
-                            full_name: fullName,
+                            name: fullName,
+                            role: role,
                         }
                     }
                 });
@@ -70,7 +71,7 @@ const Auth: React.FC = () => {
                 if (error) throw error;
 
                 if (data.user) {
-                    await authService.createUserProfile(data.user.id, email, fullName, role, bio);
+                    // await authService.createUserProfile(data.user.id, email, fullName, role, bio);
                     await refreshProfile();
                 }
 
