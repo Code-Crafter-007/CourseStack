@@ -1,88 +1,72 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import CourseCard from '../components/course/CourseCard';
 import ContinueLearning from '../components/course/ContinueLearning';
 import { useAuth } from '../context/AuthContext';
-import type { Course, EnrolledCourse } from '../types/course';
+import type { UICourse, EnrolledCourse } from '../types/course';
+import { studentService } from '../services/studentService';
 import '../styles/home.css';
-
-// --- DUMMY DATA ---
-const dummyEnrolled: EnrolledCourse[] = [
-    {
-        id: 'c1',
-        title: 'Advanced React patterns & Performance',
-        instructor: 'Sarah Drasner',
-        thumbnail: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?q=80&w=800&auto=format&fit=crop',
-        rating: 4.9,
-        students: 12450,
-        progress: 65,
-        currentLecture: 15,
-        totalLectures: 42
-    },
-    {
-        id: 'c2',
-        title: 'Fullstack Next.js 14 Masterclass',
-        instructor: 'Lee Robinson',
-        thumbnail: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=800&auto=format&fit=crop',
-        rating: 4.8,
-        students: 8900,
-        progress: 12,
-        currentLecture: 3,
-        totalLectures: 85
-    }
-];
-
-const dummyRecommended: Course[] = [
-    {
-        id: 'c3',
-        title: 'Mastering TypeScript 5.0 from Scratch',
-        instructor: 'Matt Pocock',
-        thumbnail: 'https://images.unsplash.com/photo-1516116216624-53e697fedbea?q=80&w=800&auto=format&fit=crop',
-        rating: 4.9,
-        students: 45200
-    },
-    {
-        id: 'c4',
-        title: 'UI/UX Design for Web Developers',
-        instructor: 'Gary Simon',
-        thumbnail: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?q=80&w=800&auto=format&fit=crop',
-        rating: 4.7,
-        students: 31050
-    },
-    {
-        id: 'c5',
-        title: 'Node.js & Microservices Architecture',
-        instructor: 'Stephen Grider',
-        thumbnail: 'https://images.unsplash.com/photo-1555099962-4199c345e5dd?q=80&w=800&auto=format&fit=crop',
-        rating: 4.8,
-        students: 110200
-    },
-    {
-        id: 'c6',
-        title: 'Python for Data Science & Machine Learning',
-        instructor: 'Jose Portilla',
-        thumbnail: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=800&auto=format&fit=crop',
-        rating: 4.6,
-        students: 450000
-    }
-];
-
-const categories = [
-    { name: 'Web Development', icon: '💻' },
-    { name: 'Data Science', icon: '📊' },
-    { name: 'AI / Machine Learning', icon: '🤖' },
-    { name: 'Mobile Development', icon: '📱' },
-    { name: 'Cloud & DevOps', icon: '☁️' }
-];
 
 const Home: React.FC = () => {
     const { currentUser } = useAuth();
 
-    // Derived stats from dummy data (later fetched from Supabase)
-    const totalEnrolled = dummyEnrolled.length;
-    const totalCompleted = 0; // placeholder
-    const overallProgress = Math.round(dummyEnrolled.reduce((acc, curr) => acc + (curr.progress || 0), 0) / (totalEnrolled || 1));
+    const [enrolledCourses, setEnrolledCourses] = useState<EnrolledCourse[]>([]);
+    const [recommendedCourses, setRecommendedCourses] = useState<UICourse[]>([]);
+    const [popularCourses, setPopularCourses] = useState<UICourse[]>([]);
+    const [categories, setCategories] = useState<{ name: string; icon: string }[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            setIsLoading(true);
+            try {
+                // Fetch basic data that don't depend on the user
+                const [recommendedData, popularData, categoriesData] = await Promise.all([
+                    studentService.getRecommendedCourses(),
+                    studentService.getPopularCourses(),
+                    studentService.getCategories(),
+                ]);
+
+                setRecommendedCourses(recommendedData);
+                setPopularCourses(popularData);
+                setCategories(categoriesData);
+
+                // Fetch user specific data
+                if (currentUser?.id) {
+                    const enrolledData = await studentService.getEnrolledCourses(currentUser.id);
+                    setEnrolledCourses(enrolledData);
+                }
+            } catch (error) {
+                console.error("Failed to load dashboard data:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, [currentUser?.id]);
+
+    const totalEnrolled = enrolledCourses.length;
+    // Calculate total progress from all enrolled courses
+    const overallProgress = totalEnrolled > 0 
+        ? Math.round(enrolledCourses.reduce((acc, curr) => acc + (curr.progress || 0), 0) / totalEnrolled) 
+        : 0;
+    
+    // Placeholder for completed logic until we have full progress tracking
+    const totalCompleted = 0; 
+
+    if (isLoading) {
+        return (
+            <div className="home-container">
+                <Navbar />
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: 'white' }}>
+                    <h2>Loading dashboard...</h2>
+                </div>
+                <Footer />
+            </div>
+        );
+    }
 
     return (
         <div className="home-container">
@@ -118,39 +102,53 @@ const Home: React.FC = () => {
                 </div>
 
                 {/* Continue Learning */}
-                <ContinueLearning courses={dummyEnrolled} />
+                {enrolledCourses.length > 0 && (
+                    <ContinueLearning courses={enrolledCourses} />
+                )}
 
                 {/* Recommended */}
                 <div className="section-container">
                     <h2 className="section-title">Recommended for You</h2>
-                    <div className="course-grid">
-                        {dummyRecommended.map(course => (
-                            <CourseCard key={course.id} course={course} />
-                        ))}
-                    </div>
+                    {recommendedCourses.length > 0 ? (
+                        <div className="course-grid">
+                            {recommendedCourses.map(course => (
+                                <CourseCard key={course.id} course={course} />
+                            ))}
+                        </div>
+                    ) : (
+                        <p style={{ color: '#aaa' }}>No recommended courses found.</p>
+                    )}
                 </div>
 
                 {/* Popular Trending */}
                 <div className="section-container">
                     <h2 className="section-title">🔥 Popular Courses</h2>
-                    <div className="course-grid">
-                        {[...dummyRecommended].reverse().slice(0, 3).map(course => (
-                            <CourseCard key={course.id + '-popular'} course={course} />
-                        ))}
-                    </div>
+                    {popularCourses.length > 0 ? (
+                        <div className="course-grid">
+                            {popularCourses.map(course => (
+                                <CourseCard key={course.id + '-popular'} course={course} />
+                            ))}
+                        </div>
+                    ) : (
+                        <p style={{ color: '#aaa' }}>No popular courses found.</p>
+                    )}
                 </div>
 
                 {/* Categories */}
                 <div className="section-container">
                     <h2 className="section-title">Top Categories</h2>
-                    <div className="categories-grid">
-                        {categories.map((cat, idx) => (
-                            <div key={idx} className="glass-card category-card">
-                                <span className="category-icon">{cat.icon}</span>
-                                <div className="category-name">{cat.name}</div>
-                            </div>
-                        ))}
-                    </div>
+                    {categories.length > 0 ? (
+                        <div className="categories-grid">
+                            {categories.map((cat, idx) => (
+                                <div key={idx} className="glass-card category-card">
+                                    <span className="category-icon">{cat.icon}</span>
+                                    <div className="category-name">{cat.name}</div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p style={{ color: '#aaa' }}>No categories found.</p>
+                    )}
                 </div>
 
             </div>

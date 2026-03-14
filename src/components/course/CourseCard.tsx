@@ -1,8 +1,8 @@
 import React from 'react';
-import type { Course } from '../../types/course';
+import type { UICourse } from '../../types/course';
 
 interface CourseCardProps {
-    course: Course;
+    course: UICourse;
 }
 
 const CourseCard: React.FC<CourseCardProps> = ({ course }) => {
