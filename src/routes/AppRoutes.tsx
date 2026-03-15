@@ -6,6 +6,8 @@ import Home from '../pages/Home';
 import TutorDashboard from '../pages/TutorDashboard';
 import AdminPanel from '../pages/AdminPanel';
 import type { UserRole } from '../types';
+import WishlistPage from '../pages/WishlistPage';   
+
 
 // Wrapper for routes that require authentication
 const ProtectedRoute = ({
@@ -102,6 +104,9 @@ const AppRoutes: React.FC = () => {
                     </ProtectedRoute>
                 }
             />
+
+            <Route path="/wishlist" element={<WishlistPage />} />
+
 
             {/* Catch-all route */}
             <Route path="*" element={<RootRedirect />} />
