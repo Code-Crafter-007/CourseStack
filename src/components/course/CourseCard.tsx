@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { UICourse } from '../../types/course';
 import { Heart } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -19,6 +20,12 @@ const CourseCard: React.FC<CourseCardProps> = ({ course }) => {
         if (!currentUser) return alert('Please log in');
         wishlisted ? remove(course.id) : add(course.id);
     };
+    const navigate = useNavigate();
+
+    const handleViewCourse = () => {
+        navigate(`/course/${course.id}`);
+    };
+
     return (
         <div className="glass-card course-card">
             <div style={{ position: 'relative' }}>
@@ -46,19 +53,28 @@ const CourseCard: React.FC<CourseCardProps> = ({ course }) => {
 
             <div className="course-content">
                 <h3 className="course-title">{course.title}</h3>
-                <div className="course-instructor">{course.instructor}</div>
 
-                <div className="course-meta">
-                    <span style={{ color: '#fbbf24', fontWeight: 600 }}>⭐ {course.rating.toFixed(1)}</span>
-                    <span>•</span>
-                    <span>{course.students.toLocaleString()} students</span>
+                <div className="course-instructor">
+                    {course.instructor}
                 </div>
 
-                <button className="btn-primary" onClick={(e) => {
-                    e.stopPropagation();
-                    console.log('Enroll in', course.title);
-                }}>
-                    Enroll Now
+                <div className="course-meta">
+                    <span style={{ color: '#fbbf24', fontWeight: 600 }}>
+                        ⭐ {course.rating.toFixed(1)}
+                    </span>
+
+                    <span>•</span>
+
+                    <span>
+                        {course.students.toLocaleString()} students
+                    </span>
+                </div>
+
+                <button
+                    className="btn-primary"
+                    onClick={handleViewCourse}
+                >
+                    View Course
                 </button>
             </div>
         </div>

@@ -1,15 +1,19 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+
 import Auth from '../pages/Auth';
 import Home from '../pages/Home';
 import TutorDashboard from '../pages/TutorDashboard';
 import AdminPanel from '../pages/AdminPanel';
+import CourseDetail from '../pages/CourseDetail';
+
 import type { UserRole } from '../types';
 import WishlistPage from '../pages/WishlistPage';   
 
 
-// Wrapper for routes that require authentication
+
+// Protected Route Wrapper
 const ProtectedRoute = ({
     children,
     allowedRoles
@@ -17,10 +21,24 @@ const ProtectedRoute = ({
     children: React.ReactNode,
     allowedRoles?: UserRole[]
 }) => {
+
     const { currentUser, userRole, loading } = useAuth();
 
     if (loading) {
-        return <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#000', color: '#fff' }}>Loading...</div>;
+        return (
+            <div
+                style={{
+                    minHeight: '100vh',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    background: '#000',
+                    color: '#fff'
+                }}
+            >
+                Loading...
+            </div>
+        );
     }
 
     if (!currentUser) {
@@ -28,56 +46,80 @@ const ProtectedRoute = ({
     }
 
     if (allowedRoles && userRole && !allowedRoles.includes(userRole)) {
-        // Redirect to their default dashboard if they try to access an unauthorized route
+
         switch (userRole) {
-            case 'student': return <Navigate to="/dashboard" replace />;
-            case 'tutor': return <Navigate to="/tutor-dashboard" replace />;
-            case 'admin': return <Navigate to="/admin-panel" replace />;
-            default: return <Navigate to="/auth" replace />;
+            case 'student':
+                return <Navigate to="/dashboard" replace />;
+
+            case 'tutor':
+                return <Navigate to="/tutor-dashboard" replace />;
+
+            case 'admin':
+                return <Navigate to="/admin-panel" replace />;
+
+            default:
+                return <Navigate to="/auth" replace />;
         }
     }
 
     return <>{children}</>;
 };
 
+
 // Root redirect based on role
 const RootRedirect = () => {
+
     const { currentUser, userRole, loading } = useAuth();
 
-  if (loading) {
-    return (
-        <div style={{
-            minHeight: "100vh",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            background: "#000",
-            color: "#fff"
-        }}>
-            Loading...
-        </div>
-    );
-}
+    if (loading) {
+        return (
+            <div
+                style={{
+                    minHeight: "100vh",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    background: "#000",
+                    color: "#fff"
+                }}
+            >
+                Loading...
+            </div>
+        );
+    }
 
     if (!currentUser) return <Navigate to="/auth" replace />;
 
     switch (userRole) {
-        case 'student': return <Navigate to="/dashboard" replace />;
-        case 'tutor': return <Navigate to="/tutor-dashboard" replace />;
-        case 'admin': return <Navigate to="/admin-panel" replace />;
-        default: return <Navigate to="/auth" replace />;
+
+        case 'student':
+            return <Navigate to="/dashboard" replace />;
+
+        case 'tutor':
+            return <Navigate to="/tutor-dashboard" replace />;
+
+        case 'admin':
+            return <Navigate to="/admin-panel" replace />;
+
+        default:
+            return <Navigate to="/auth" replace />;
     }
 };
 
+
 const AppRoutes: React.FC = () => {
+
     return (
+
         <Routes>
+
+            {/* Root */}
             <Route path="/" element={<RootRedirect />} />
 
-            {/* Public Routes */}
+            {/* Public */}
             <Route path="/auth" element={<Auth />} />
 
-            {/* Protected Routes */}
+            {/* Student Dashboard */}
             <Route
                 path="/dashboard"
                 element={
@@ -87,6 +129,17 @@ const AppRoutes: React.FC = () => {
                 }
             />
 
+            {/* Student Course Detail */}
+            <Route
+                path="/course/:courseId"
+                element={
+                    <ProtectedRoute allowedRoles={['student']}>
+                        <CourseDetail />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Tutor Dashboard */}
             <Route
                 path="/tutor-dashboard"
                 element={
@@ -96,6 +149,7 @@ const AppRoutes: React.FC = () => {
                 }
             />
 
+            {/* Admin Panel */}
             <Route
                 path="/admin-panel"
                 element={
@@ -105,11 +159,15 @@ const AppRoutes: React.FC = () => {
                 }
             />
 
+ 
             <Route path="/wishlist" element={<WishlistPage />} />
 
 
             {/* Catch-all route */}
+
+            {/* Catch all */}
             <Route path="*" element={<RootRedirect />} />
+
         </Routes>
     );
 };
