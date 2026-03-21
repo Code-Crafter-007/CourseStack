@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../services/supabaseClient";
 import { useAuth } from "../context/AuthContext";
+import ReviewSection from "../components/course/ReviewSection";
 
 interface Lecture {
   lecture_id: string;
@@ -344,6 +345,11 @@ const CourseDetail: React.FC = () => {
         </p>
 
       </div>
+
+      <div style={{ padding: 60, borderTop: "1px solid #333" }}>
+    {courseId && <ReviewSection courseId={courseId} />}
+</div>
+
 
     </div>
   );

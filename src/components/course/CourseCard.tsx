@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { UICourse } from '../../types/course';
 import { Heart } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWishlist } from '../../context/WishlistContext';
+import { reviewService } from '../../services/reviewService';
+
 
 
 interface CourseCardProps {
@@ -21,6 +23,17 @@ const CourseCard: React.FC<CourseCardProps> = ({ course }) => {
         wishlisted ? remove(course.id) : add(course.id);
     };
     const navigate = useNavigate();
+    const [avgRating, setAvgRating] = useState<number | null>(null);
+
+    useEffect(() => {
+        reviewService.getAverageRating(course.id).then((rating) => {
+            setAvgRating(rating);
+        });
+    }, [course.id]);
+
+const displayRating = avgRating !== null && avgRating > 0
+        ? avgRating.toFixed(1)
+        : null;
 
     const handleViewCourse = () => {
         navigate(`/course/${course.id}`);
@@ -59,12 +72,21 @@ const CourseCard: React.FC<CourseCardProps> = ({ course }) => {
                 </div>
 
                 <div className="course-meta">
-                    <span style={{ color: '#fbbf24', fontWeight: 600 }}>
-                        ⭐ {course.rating.toFixed(1)}
-                    </span>
-
-                    <span>•</span>
-
+                    {displayRating ? (
+                        <>
+                            <span style={{ color: '#fbbf24', fontWeight: 600 }}>
+                                ⭐ {displayRating}
+                            </span>
+                            <span>•</span>
+                        </>
+                    ) : (
+                        <>
+                            <span style={{ opacity: 0.5, fontSize: '0.85rem' }}>
+                                No ratings yet
+                            </span>
+                            <span>•</span>
+                        </>
+                    )}
                     <span>
                         {course.students.toLocaleString()} students
                     </span>
