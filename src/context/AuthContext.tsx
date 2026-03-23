@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { authService } from '../services/authService';
 import type { User as AppUser, UserRole } from '../types';
@@ -25,16 +25,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
     const [userRole, setUserRole] = useState<UserRole | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
+    const isFetching = useRef(false); // 👈 ADD THIS - prevents double fetching
+
+    const fetchAndSetProfile = async (userId: string, mounted: boolean) => {
+        // 👇 If already fetching, skip
+        if (isFetching.current) return;
+        isFetching.current = true;
+
+        try {
+            const profile = await authService.getUserProfile(userId);
+            if (profile && mounted) {
+                setCurrentUser(profile as AppUser);
+                setUserRole(profile.role);
+            }
+        } catch (err) {
+            console.warn("Error fetching user profile:", err);
+        } finally {
+            isFetching.current = false;
+        }
+    };
 
     const refreshProfile = async () => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
-                const profile = await authService.getUserProfile(session.user.id);
-                if (profile) {
-                    setCurrentUser(profile as AppUser);
-                    setUserRole(profile.role);
-                }
+                await fetchAndSetProfile(session.user.id, true);
             }
         } catch (error) {
             console.error("Error refreshing profile manually:", error);
@@ -47,13 +62,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const initAuth = async () => {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
-
                 if (session?.user && mounted) {
-                    const profile = await authService.getUserProfile(session.user.id);
-                    if (profile && mounted) {
-                        setCurrentUser(profile as AppUser);
-                        setUserRole(profile.role);
-                    }
+                    await fetchAndSetProfile(session.user.id, mounted);
                 }
             } catch (err) {
                 console.warn("Auth initialization error:", err);
@@ -62,28 +72,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         };
 
-        // Execute init Auth
         initAuth();
 
-        // Listen for auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            // Skip INITIAL_SESSION as it's handled by initAuth, preventing double fetching & AbortErrors
             if (event === 'INITIAL_SESSION') return;
 
             if (session?.user && mounted) {
-                try {
-                    const profile = await authService.getUserProfile(session.user.id);
-                    if (profile && mounted) {
-                        setCurrentUser(profile as AppUser);
-                        setUserRole(profile.role);
-                    }
-                } catch (err) {
-                    console.warn("Auth state change error:", err);
-                }
+                await fetchAndSetProfile(session.user.id, mounted);
             } else if (!session?.user && mounted) {
                 setCurrentUser(null);
                 setUserRole(null);
+                isFetching.current = false; // 👈 Reset on logout
             }
+
+            // 👇 Handle loading on sign in/out events
+            if (event === 'SIGNED_OUT' && mounted) setLoading(false);
         });
 
         return () => {
@@ -98,13 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserRole(null);
     };
 
-    const value = {
-        currentUser,
-        userRole,
-        loading,
-        logout,
-        refreshProfile
-    };
+    const value = { currentUser, userRole, loading, logout, refreshProfile };
 
     return (
         <AuthContext.Provider value={value}>
