@@ -18,7 +18,7 @@ export const studentService = {
                     )
                 )
             `)
-            .eq('student_id', studentId);
+            .eq('user_id', studentId);
 
         if (error) {
             console.error("Error fetching enrolled courses:", error.message);
