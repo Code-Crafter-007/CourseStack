@@ -465,46 +465,51 @@ const CourseDetail: React.FC = () => {
 
                     {lecture.title}
 
-                    {isEnrolled ? (
-                      <button
-                        onClick={() => {
-                          const videoUrl = normalizeVideoUrl(lecture.video_url);
-                          if (videoUrl) {
-                            setSelectedLecture({
-                              lectureId: lecture.lecture_id,
-                              title: lecture.title,
-                              videoUrl
-                            });
-                            return;
-                          }
-                          alert("Video URL not available for this lecture yet.");
-                        }}
-                        style={{
-                          background: "#2563eb",
-                          border: "none",
-                          color: "white",
-                          padding: "6px 10px",
-                          borderRadius: 4,
-                          cursor: "pointer"
-                        }}
-                      >
-                        Watch
-                      </button>
-                    ) : (
-                      <span style={{ color: "#aaa" }}>Preview</span>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {isEnrolled ? (
+                        <button
+                          onClick={() => {
+                            const videoUrl = normalizeVideoUrl(lecture.video_url);
+                            if (videoUrl) {
+                              setSelectedLecture({
+                                lectureId: lecture.lecture_id,
+                                title: lecture.title,
+                                videoUrl
+                              });
+                              return;
+                            }
+                            alert("Video URL not available for this lecture yet.");
+                          }}
+                          style={{
+                            background: "#2563eb",
+                            border: "none",
+                            color: "white",
+                            padding: "6px 10px",
+                            borderRadius: 4,
+                            cursor: "pointer"
+                          }}
+                        >
+                          Watch
+                        </button>
+                      ) : (
+                        <span style={{ color: "#aaa" }}>Preview</span>
+                      )}
 
-                    {isEnrolled && (
-                      <span
-                        style={{
-                          marginLeft: 12,
-                          fontSize: 12,
-                          color: watchedLectureIds.has(lecture.lecture_id) ? "#22c55e" : "#9ca3af"
-                        }}
-                      >
-                        {watchedLectureIds.has(lecture.lecture_id) ? "Watched" : "Left to watch"}
-                      </span>
-                    )}
+                      {isEnrolled && (
+                        <span
+                          title={watchedLectureIds.has(lecture.lecture_id) ? "Watched" : "Left to watch"}
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: watchedLectureIds.has(lecture.lecture_id) ? "#22c55e" : "#ef4444",
+                            minWidth: 14,
+                            textAlign: "center"
+                          }}
+                        >
+                          {watchedLectureIds.has(lecture.lecture_id) ? "✓" : "✗"}
+                        </span>
+                      )}
+                    </div>
 
                   </li>
 
