@@ -77,6 +77,7 @@ export interface UICourse {
     title: string;
     instructor: string;
     thumbnail: string;
+    category?: string;
     rating: number;
     students: number;
     progress?: number;

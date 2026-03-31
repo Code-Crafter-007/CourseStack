@@ -276,6 +276,11 @@
     background: rgba(255, 255, 255, 0.05);
 }
 
+.category-card.active {
+    border-color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .category-icon {
     font-size: 32px;
     margin-bottom: 12px;

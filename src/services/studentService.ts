@@ -9,11 +9,20 @@ const ENROLLMENT_SELECT = `
         title,
         thumbnail_url,
         price,
+        Categories ( name ),
         instructors (
             users ( name )
         )
     )
 `;
+
+const getCategoryName = (course: any): string | undefined => {
+    const raw = course?.Categories;
+    if (Array.isArray(raw)) {
+        return raw[0]?.name;
+    }
+    return raw?.name;
+};
 
 const getThumbnailSrc = (thumbnailUrl?: string | null): string => {
     if (!thumbnailUrl) {
@@ -143,6 +152,7 @@ export const studentService = {
                     title: course.title,
                     instructor: instructorName,
                     thumbnail: getThumbnailSrc(course.thumbnail_url),
+                    category: getCategoryName(course),
                     rating: 4.5,
                     students: 0,
                     currentLecture,
@@ -161,6 +171,7 @@ export const studentService = {
                 course_id,
                 title,
                 thumbnail_url,
+                Categories ( name ),
                 instructors (
                     users ( name )
                 )
@@ -177,6 +188,7 @@ export const studentService = {
             title: course.title,
             instructor: (course.instructors as any)?.users?.name || 'Unknown Instructor',
             thumbnail: getThumbnailSrc(course.thumbnail_url),
+            category: getCategoryName(course),
             rating: 4.7,
             students: Math.floor(Math.random() * 1000) // Placeholder
         }));
@@ -189,6 +201,7 @@ export const studentService = {
                 course_id,
                 title,
                 thumbnail_url,
+                Categories ( name ),
                 instructors (
                     users ( name )
                 )
@@ -206,6 +219,7 @@ export const studentService = {
             title: course.title,
             instructor: (course.instructors as any)?.users?.name || 'Unknown Instructor',
             thumbnail: getThumbnailSrc(course.thumbnail_url),
+            category: getCategoryName(course),
             rating: 4.9,
             students: Math.floor(Math.random() * 5000)
         }));
