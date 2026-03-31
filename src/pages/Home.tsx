@@ -103,11 +103,13 @@ const Home: React.FC = () => {
 
                 {/* Continue Learning */}
                 {enrolledCourses.length > 0 && (
-                    <ContinueLearning courses={enrolledCourses} />
+                    <div id="continue-learning">
+                        <ContinueLearning courses={enrolledCourses} />
+                    </div>
                 )}
 
                 {/* Recommended */}
-                <div className="section-container">
+                <div className="section-container" id="explore">
                     <h2 className="section-title">Recommended for You</h2>
                     {recommendedCourses.length > 0 ? (
                         <div className="course-grid">

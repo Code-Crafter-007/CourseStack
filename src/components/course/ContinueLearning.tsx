@@ -1,11 +1,14 @@
 import React from 'react';
 import type { EnrolledCourse } from '../../types/course';
+import { useNavigate } from 'react-router-dom';
 
 interface ContinueLearningProps {
     courses: EnrolledCourse[];
 }
 
 const ContinueLearning: React.FC<ContinueLearningProps> = ({ courses }) => {
+    const navigate = useNavigate();
+
     if (!courses || courses.length === 0) {
         return null; // hide section if no courses
     }
@@ -42,7 +45,7 @@ const ContinueLearning: React.FC<ContinueLearningProps> = ({ courses }) => {
 
                                 <button className="btn-primary" onClick={(e) => {
                                     e.stopPropagation();
-                                    console.log('Resume', course.title);
+                                    navigate(`/course/${course.id}`);
                                 }}>
                                     Resume Learning
                                 </button>

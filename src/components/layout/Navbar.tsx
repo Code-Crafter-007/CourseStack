@@ -36,9 +36,9 @@ const Navbar: React.FC = () => {
             </div>
 
             <div className="nav-right">
-               <a href="#explore" className="nav-link" onClick={(e) => e.preventDefault()}>Explore</a>
-                <a href="#my-learning" className="nav-link" onClick={(e) => e.preventDefault()}>My Learning</a>
-                <a href="#bookmarks" className="nav-link" onClick={(e) => e.preventDefault()}>Bookmarks</a>
+                <Link to="/dashboard#explore" className="nav-link">Explore</Link>
+                <Link to="/dashboard#continue-learning" className="nav-link">My Learning</Link>
+                <Link to="/wishlist" className="nav-link">Bookmarks</Link>
 
                 {/* Wishlist icon with red badge count */}
                 <Link to="/wishlist" className="nav-link" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
