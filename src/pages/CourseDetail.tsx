@@ -260,12 +260,16 @@ const CourseDetail: React.FC = () => {
     courseContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const markLectureAsWatched = async (lectureId: string) => {
+  const setLectureWatchedState = async (lectureId: string, watched: boolean) => {
     if (!lectureId || !userId) return;
 
     setWatchedLectureIds((prev) => {
       const next = new Set(prev);
-      next.add(lectureId);
+      if (watched) {
+        next.add(lectureId);
+      } else {
+        next.delete(lectureId);
+      }
       return next;
     });
 
@@ -284,7 +288,7 @@ const CourseDetail: React.FC = () => {
       if ((existing.data as ProgressRow | null)?.progress_id) {
         const updateResult = await supabase
           .from("user_progress")
-          .update({ watched: true, watched_at: new Date().toISOString() })
+          .update({ watched, watched_at: watched ? new Date().toISOString() : null })
           .eq("progress_id", (existing.data as ProgressRow).progress_id);
 
         if (updateResult.error) throw updateResult.error;
@@ -296,8 +300,8 @@ const CourseDetail: React.FC = () => {
         .insert({
           [column]: userId,
           lecture_id: lectureId,
-          watched: true,
-          watched_at: new Date().toISOString()
+          watched,
+          watched_at: watched ? new Date().toISOString() : null
         });
 
       if (insertResult.error) throw insertResult.error;
@@ -589,10 +593,17 @@ const CourseDetail: React.FC = () => {
               <strong>{selectedLecture.title}</strong>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
-                  onClick={() => markLectureAsWatched(selectedLecture.lectureId)}
-                  style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+                  onClick={() => setLectureWatchedState(selectedLecture.lectureId, !watchedLectureIds.has(selectedLecture.lectureId))}
+                  style={{
+                    background: watchedLectureIds.has(selectedLecture.lectureId) ? "#dc2626" : "#16a34a",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "6px 10px",
+                    cursor: "pointer"
+                  }}
                 >
-                  Mark Watched
+                  {watchedLectureIds.has(selectedLecture.lectureId) ? "Mark Unwatched" : "Mark Watched"}
                 </button>
                 <button
                   onClick={() => setSelectedLecture(null)}
@@ -616,7 +627,7 @@ const CourseDetail: React.FC = () => {
               <video
                 controls
                 src={selectedLecture.videoUrl}
-                onEnded={() => markLectureAsWatched(selectedLecture.lectureId)}
+                onEnded={() => setLectureWatchedState(selectedLecture.lectureId, true)}
                 style={{ width: "100%", borderRadius: 8, maxHeight: "70vh", background: "#000" }}
               />
             )}

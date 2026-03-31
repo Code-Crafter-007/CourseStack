@@ -33,7 +33,7 @@ const ContinueLearning: React.FC<ContinueLearningProps> = ({ courses }) => {
 
                             <div style={{ marginTop: 'auto' }}>
                                 <div className="continue-lecture-info">
-                                    Lecture {course.currentLecture} / {course.totalLectures}
+                                    Watched {course.completedLectures} / {course.totalLectures}
                                 </div>
 
                                 <div className="progress-bar-bg">
