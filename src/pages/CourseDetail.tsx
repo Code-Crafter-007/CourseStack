@@ -187,6 +187,40 @@ const CourseDetail: React.FC = () => {
     }
   };
 
+  const handleContinueLearning = () => {
+    if (!modules.length) {
+      alert("No content available yet for this course.");
+      return;
+    }
+
+    const firstModule = [...modules].sort((a, b) => a.order_number - b.order_number)[0];
+    if (!firstModule) {
+      alert("No content available yet for this course.");
+      return;
+    }
+
+    // Keep the first module open so learners can continue from content immediately.
+    setOpenModules((prev) => {
+      const next = new Set(prev);
+      next.add(firstModule.module_id);
+      return next;
+    });
+
+    const firstLectureWithVideo = [...(firstModule.lectures || [])]
+      .sort((a, b) => a.order_number - b.order_number)
+      .find((lecture) => normalizeVideoUrl(lecture.video_url));
+
+    if (!firstLectureWithVideo) {
+      alert("Lectures are listed, but video links are not available yet.");
+      return;
+    }
+
+    setSelectedLecture({
+      title: firstLectureWithVideo.title,
+      videoUrl: normalizeVideoUrl(firstLectureWithVideo.video_url)
+    });
+  };
+
 
   if (loading) {
     return <div style={{ padding: 40 }}>Loading course...</div>;
@@ -247,6 +281,7 @@ const CourseDetail: React.FC = () => {
 
           {isEnrolled ? (
             <button
+              onClick={handleContinueLearning}
               style={{
                 width: "100%",
                 marginTop: 15,
@@ -255,10 +290,11 @@ const CourseDetail: React.FC = () => {
                 border: "none",
                 borderRadius: 6,
                 color: "white",
-                fontWeight: "bold"
+                fontWeight: "bold",
+                cursor: "pointer"
               }}
             >
-              Enrolled
+              Continue Learning
             </button>
           ) : (
             <button
