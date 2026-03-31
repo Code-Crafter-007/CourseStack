@@ -20,7 +20,7 @@ const WishlistContext = createContext<WishlistContextType>({
     isWishlisted: () => false,
 });
 
-export const useWishlist = (p0: string | null) => useContext(WishlistContext);
+export const useWishlist = (_userId?: string | null) => useContext(WishlistContext);
 
 export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { currentUser } = useAuth();

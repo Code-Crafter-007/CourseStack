@@ -69,13 +69,18 @@ const Navbar: React.FC = () => {
                     )}
                 </Link>
 
-               <Link to="/profile" className="nav-avatar" title="Profile">
-    {getInitials(currentUser?.name || '')}
-</Link>
+                <Link to="/profile" className="nav-avatar" title="Profile">
                     {getInitials(currentUser?.name || '')}
-                </div>
-
-            
+                </Link>
+                <button
+                    type="button"
+                    className="nav-link"
+                    onClick={handleLogout}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                    Logout
+                </button>
+            </div>
         </nav>
     );
 };
