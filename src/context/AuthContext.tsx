@@ -35,7 +35,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const profile = await authService.getUserProfile(userId);
             if (profile && mounted) {
-                setCurrentUser(profile as AppUser);
+                const normalizedProfile = {
+                    ...profile,
+                    id: (profile as any).id ?? (profile as any).user_id ?? userId
+                };
+                setCurrentUser(normalizedProfile as AppUser);
                 setUserRole(profile.role);
             }
         } catch (err) {

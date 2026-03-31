@@ -373,6 +373,7 @@ const [lectureTypeInput, setLectureTypeInput] = useState<'youtube' | 'upload'>('
 const [lectureUrlInput, setLectureUrlInput] = useState<string>('');
 const [lectureFileInput, setLectureFileInput] = useState<File | null>(null);
 const [lectureSaving, setLectureSaving] = useState<boolean>(false);
+const tutorId = (currentUser as any)?.id ?? (currentUser as any)?.user_id ?? null;
 
 const categoryMap = useMemo(
     () => new Map(categories.map((c) => [c.category_id, c.name])),
@@ -381,11 +382,14 @@ const categoryMap = useMemo(
 
 useEffect(() => {
     const run = async () => {
-        if (!currentUser?.id) return;
+        if (!tutorId) {
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             const [courseRows, categoryRows] = await Promise.all([
-                tutorService.getTutorCourses(currentUser.id),
+                tutorService.getTutorCourses(tutorId),
                 tutorService.getCategories()
             ]);
             setCourses(courseRows);
@@ -397,7 +401,7 @@ useEffect(() => {
         }
     };
     run();
-}, [currentUser?.id]);
+}, [tutorId]);
 
 useEffect(() => {
     if (builderCourseId) {
@@ -476,18 +480,18 @@ const handleSubmit = async (e: React.FormEvent) => {
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    if (!currentUser?.id) return;
+    if (!tutorId) return;
     const payload = buildPayload();
     if (!payload) return;
 
     setSaving(true);
     try {
         if (editingCourseId) {
-            const updated = await tutorService.updateCourse(currentUser.id, editingCourseId, payload);
+            const updated = await tutorService.updateCourse(tutorId, editingCourseId, payload);
             setCourses((prev) => prev.map((c) => (c.course_id === editingCourseId ? updated : c)));
             setSuccessMsg('Course updated successfully.');
         } else {
-            const created = await tutorService.createCourse(currentUser.id, payload);
+            const created = await tutorService.createCourse(tutorId, payload);
             setCourses((prev) => [created, ...prev]);
             setSuccessMsg('Course created successfully.');
         }
@@ -500,11 +504,11 @@ const handleSubmit = async (e: React.FormEvent) => {
 };
 
 const handleDelete = async (courseId: string) => {
-    if (!currentUser?.id) return;
+    if (!tutorId) return;
     if (!window.confirm('Delete this course? This action cannot be undone.')) return;
 
     try {
-        await tutorService.deleteCourse(currentUser.id, courseId);
+        await tutorService.deleteCourse(tutorId, courseId);
         setCourses((prev) => prev.filter((c) => c.course_id !== courseId));
         setSuccessMsg('Course deleted successfully.');
     } catch (error: any) {
