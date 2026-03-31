@@ -9,8 +9,8 @@ import AdminPanel from '../pages/AdminPanel';
 import CourseDetail from '../pages/CourseDetail';
 
 import type { UserRole } from '../types';
-import WishlistPage from '../pages/WishlistPage';   
-
+import WishlistPage from '../pages/WishlistPage';
+import ProfilePage from '../pages/ProfilePage';
 
 
 // Protected Route Wrapper
@@ -26,16 +26,7 @@ const ProtectedRoute = ({
 
     if (loading) {
         return (
-            <div
-                style={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    background: '#000',
-                    color: '#fff'
-                }}
-            >
+            <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#000', color: '#fff' }}>
                 Loading...
             </div>
         );
@@ -46,19 +37,11 @@ const ProtectedRoute = ({
     }
 
     if (allowedRoles && userRole && !allowedRoles.includes(userRole)) {
-
         switch (userRole) {
-            case 'student':
-                return <Navigate to="/dashboard" replace />;
-
-            case 'tutor':
-                return <Navigate to="/tutor-dashboard" replace />;
-
-            case 'admin':
-                return <Navigate to="/admin-panel" replace />;
-
-            default:
-                return <Navigate to="/auth" replace />;
+            case 'student': return <Navigate to="/dashboard" replace />;
+            case 'tutor': return <Navigate to="/tutor-dashboard" replace />;
+            case 'admin': return <Navigate to="/admin-panel" replace />;
+            default: return <Navigate to="/auth" replace />;
         }
     }
 
@@ -73,16 +56,7 @@ const RootRedirect = () => {
 
     if (loading) {
         return (
-            <div
-                style={{
-                    minHeight: "100vh",
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    background: "#000",
-                    color: "#fff"
-                }}
-            >
+            <div style={{ minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center", background: "#000", color: "#fff" }}>
                 Loading...
             </div>
         );
@@ -91,26 +65,16 @@ const RootRedirect = () => {
     if (!currentUser) return <Navigate to="/auth" replace />;
 
     switch (userRole) {
-
-        case 'student':
-            return <Navigate to="/dashboard" replace />;
-
-        case 'tutor':
-            return <Navigate to="/tutor-dashboard" replace />;
-
-        case 'admin':
-            return <Navigate to="/admin-panel" replace />;
-
-        default:
-            return <Navigate to="/auth" replace />;
+        case 'student': return <Navigate to="/dashboard" replace />;
+        case 'tutor': return <Navigate to="/tutor-dashboard" replace />;
+        case 'admin': return <Navigate to="/admin-panel" replace />;
+        default: return <Navigate to="/auth" replace />;
     }
 };
 
 
 const AppRoutes: React.FC = () => {
-
     return (
-
         <Routes>
 
             {/* Root */}
@@ -159,11 +123,18 @@ const AppRoutes: React.FC = () => {
                 }
             />
 
- 
+            {/* Wishlist */}
             <Route path="/wishlist" element={<WishlistPage />} />
 
-
-            {/* Catch-all route */}
+            {/* Profile */}
+            <Route
+                path="/profile"
+                element={
+                    <ProtectedRoute allowedRoles={['student']}>
+                        <ProfilePage />
+                    </ProtectedRoute>
+                }
+            />
 
             {/* Catch all */}
             <Route path="*" element={<RootRedirect />} />
