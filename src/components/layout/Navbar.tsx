@@ -5,8 +5,12 @@ import { Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useWishlist } from '../../context/WishlistContext';
 
+interface NavbarProps {
+    searchValue?: string;
+    onSearchChange?: (value: string) => void;
+}
 
-const Navbar: React.FC = () => {
+const Navbar: React.FC<NavbarProps> = ({ searchValue = '', onSearchChange }) => {
     const { currentUser, logout } = useAuth();
     const navigate = useNavigate();
     const { wishlist } = useWishlist(currentUser?.id ?? null);  // ← get wishlist count
@@ -32,6 +36,8 @@ const Navbar: React.FC = () => {
                     type="text"
                     placeholder="Search courses..."
                     className="nav-search"
+                    value={searchValue}
+                    onChange={(e) => onSearchChange?.(e.target.value)}
                 />
             </div>
 

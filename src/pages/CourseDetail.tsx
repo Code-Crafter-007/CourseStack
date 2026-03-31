@@ -11,6 +11,12 @@ interface Lecture {
   video_url?: string;
 }
 
+interface ProgressRow {
+  progress_id?: string;
+  lecture_id: string;
+  watched?: boolean;
+}
+
 interface Module {
   module_id: string;
   module_title: string;
@@ -77,7 +83,8 @@ const CourseDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [openModules, setOpenModules] = useState<Set<string>>(new Set());
-  const [selectedLecture, setSelectedLecture] = useState<{ title: string; videoUrl: string } | null>(null);
+  const [selectedLecture, setSelectedLecture] = useState<{ lectureId: string; title: string; videoUrl: string } | null>(null);
+  const [watchedLectureIds, setWatchedLectureIds] = useState<Set<string>>(new Set());
 
   const toggleModule = (moduleId: string) => {
     setOpenModules((prev) => {
@@ -140,6 +147,45 @@ const CourseDetail: React.FC = () => {
 
       if (modulesData) {
         setModules(modulesData);
+
+        const lectureIds = modulesData
+          .flatMap((module: any) => (module.lectures || []).map((lecture: any) => lecture.lecture_id))
+          .filter((lectureId: string | undefined) => Boolean(lectureId));
+
+        if (lectureIds.length > 0) {
+          const loadProgress = async (column: "user_id" | "student_id") => {
+            const watchedRows = await supabase
+              .from("user_progress")
+              .select("lecture_id,watched")
+              .eq(column, userId)
+              .in("lecture_id", lectureIds)
+              .eq("watched", true);
+
+            if (!watchedRows.error) {
+              return watchedRows;
+            }
+
+            const fallbackRows = await supabase
+              .from("user_progress")
+              .select("lecture_id")
+              .eq(column, userId)
+              .in("lecture_id", lectureIds);
+
+            return fallbackRows;
+          };
+
+          let progressResult = await loadProgress("user_id");
+          if (progressResult.error) {
+            progressResult = await loadProgress("student_id");
+          }
+
+          if (!progressResult.error) {
+            const watchedIds = (progressResult.data || [])
+              .map((row: any) => row.lecture_id as string)
+              .filter(Boolean);
+            setWatchedLectureIds(new Set(watchedIds));
+          }
+        }
       }
 
       /* ENROLLMENT CHECK */
@@ -216,9 +262,64 @@ const CourseDetail: React.FC = () => {
     }
 
     setSelectedLecture({
+      lectureId: firstLectureWithVideo.lecture_id,
       title: firstLectureWithVideo.title,
       videoUrl: normalizeVideoUrl(firstLectureWithVideo.video_url)
     });
+  };
+
+  const markLectureAsWatched = async (lectureId: string) => {
+    if (!lectureId || !userId) return;
+
+    setWatchedLectureIds((prev) => {
+      const next = new Set(prev);
+      next.add(lectureId);
+      return next;
+    });
+
+    const persist = async (column: "user_id" | "student_id") => {
+      const existing = await supabase
+        .from("user_progress")
+        .select("progress_id")
+        .eq(column, userId)
+        .eq("lecture_id", lectureId)
+        .maybeSingle();
+
+      if (existing.error) {
+        throw existing.error;
+      }
+
+      if ((existing.data as ProgressRow | null)?.progress_id) {
+        const updateResult = await supabase
+          .from("user_progress")
+          .update({ watched: true, watched_at: new Date().toISOString() })
+          .eq("progress_id", (existing.data as ProgressRow).progress_id);
+
+        if (updateResult.error) throw updateResult.error;
+        return;
+      }
+
+      const insertResult = await supabase
+        .from("user_progress")
+        .insert({
+          [column]: userId,
+          lecture_id: lectureId,
+          watched: true,
+          watched_at: new Date().toISOString()
+        });
+
+      if (insertResult.error) throw insertResult.error;
+    };
+
+    try {
+      await persist("user_id");
+    } catch {
+      try {
+        await persist("student_id");
+      } catch (error) {
+        console.error("Failed to save lecture progress:", error);
+      }
+    }
   };
 
 
@@ -370,6 +471,7 @@ const CourseDetail: React.FC = () => {
                           const videoUrl = normalizeVideoUrl(lecture.video_url);
                           if (videoUrl) {
                             setSelectedLecture({
+                              lectureId: lecture.lecture_id,
                               title: lecture.title,
                               videoUrl
                             });
@@ -390,6 +492,18 @@ const CourseDetail: React.FC = () => {
                       </button>
                     ) : (
                       <span style={{ color: "#aaa" }}>Preview</span>
+                    )}
+
+                    {isEnrolled && (
+                      <span
+                        style={{
+                          marginLeft: 12,
+                          fontSize: 12,
+                          color: watchedLectureIds.has(lecture.lecture_id) ? "#22c55e" : "#9ca3af"
+                        }}
+                      >
+                        {watchedLectureIds.has(lecture.lecture_id) ? "Watched" : "Left to watch"}
+                      </span>
                     )}
 
                   </li>
@@ -460,12 +574,20 @@ const CourseDetail: React.FC = () => {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <strong>{selectedLecture.title}</strong>
-              <button
-                onClick={() => setSelectedLecture(null)}
-                style={{ background: "#222", color: "#fff", border: "1px solid #444", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
-              >
-                Close
-              </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => markLectureAsWatched(selectedLecture.lectureId)}
+                  style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+                >
+                  Mark Watched
+                </button>
+                <button
+                  onClick={() => setSelectedLecture(null)}
+                  style={{ background: "#222", color: "#fff", border: "1px solid #444", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             {getYouTubeEmbedUrl(selectedLecture.videoUrl) ? (
@@ -481,6 +603,7 @@ const CourseDetail: React.FC = () => {
               <video
                 controls
                 src={selectedLecture.videoUrl}
+                onEnded={() => markLectureAsWatched(selectedLecture.lectureId)}
                 style={{ width: "100%", borderRadius: 8, maxHeight: "70vh", background: "#000" }}
               />
             )}

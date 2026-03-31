@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import CourseCard from '../components/course/CourseCard';
@@ -16,6 +16,7 @@ const Home: React.FC = () => {
     const [popularCourses, setPopularCourses] = useState<UICourse[]>([]);
     const [categories, setCategories] = useState<{ name: string; icon: string }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -58,10 +59,39 @@ const Home: React.FC = () => {
         0
     );
 
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const matchesCourse = (course: { title: string; instructor?: string }) => {
+        if (!normalizedQuery) return true;
+        return (
+            course.title.toLowerCase().includes(normalizedQuery) ||
+            (course.instructor || '').toLowerCase().includes(normalizedQuery)
+        );
+    };
+
+    const filteredEnrolledCourses = useMemo(
+        () => enrolledCourses.filter(matchesCourse),
+        [enrolledCourses, normalizedQuery]
+    );
+
+    const filteredRecommendedCourses = useMemo(
+        () => recommendedCourses.filter(matchesCourse),
+        [recommendedCourses, normalizedQuery]
+    );
+
+    const filteredPopularCourses = useMemo(
+        () => popularCourses.filter(matchesCourse),
+        [popularCourses, normalizedQuery]
+    );
+
+    const hasSearchResults =
+        filteredEnrolledCourses.length > 0 ||
+        filteredRecommendedCourses.length > 0 ||
+        filteredPopularCourses.length > 0;
+
     if (isLoading) {
         return (
             <div className="home-container">
-                <Navbar />
+                <Navbar searchValue={searchQuery} onSearchChange={setSearchQuery} />
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: 'white' }}>
                     <h2>Loading dashboard...</h2>
                 </div>
@@ -72,7 +102,7 @@ const Home: React.FC = () => {
 
     return (
         <div className="home-container">
-            <Navbar />
+            <Navbar searchValue={searchQuery} onSearchChange={setSearchQuery} />
 
             <div className="home-content">
                 {/* Hero / Welcome */}
@@ -104,18 +134,26 @@ const Home: React.FC = () => {
                 </div>
 
                 {/* Continue Learning */}
-                {enrolledCourses.length > 0 && (
+                {filteredEnrolledCourses.length > 0 && (
                     <div id="continue-learning">
-                        <ContinueLearning courses={enrolledCourses} />
+                        <ContinueLearning courses={filteredEnrolledCourses} />
+                    </div>
+                )}
+
+                {normalizedQuery && !hasSearchResults && (
+                    <div className="section-container">
+                        <p style={{ color: '#aaa' }}>
+                            No courses found for "{searchQuery}".
+                        </p>
                     </div>
                 )}
 
                 {/* Recommended */}
                 <div className="section-container" id="explore">
                     <h2 className="section-title">Recommended for You</h2>
-                    {recommendedCourses.length > 0 ? (
+                    {filteredRecommendedCourses.length > 0 ? (
                         <div className="course-grid">
-                            {recommendedCourses.map(course => (
+                            {filteredRecommendedCourses.map(course => (
                                 <CourseCard key={course.id} course={course} />
                             ))}
                         </div>
@@ -127,9 +165,9 @@ const Home: React.FC = () => {
                 {/* Popular Trending */}
                 <div className="section-container">
                     <h2 className="section-title">🔥 Popular Courses</h2>
-                    {popularCourses.length > 0 ? (
+                    {filteredPopularCourses.length > 0 ? (
                         <div className="course-grid">
-                            {popularCourses.map(course => (
+                            {filteredPopularCourses.map(course => (
                                 <CourseCard key={course.id + '-popular'} course={course} />
                             ))}
                         </div>
