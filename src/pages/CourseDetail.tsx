@@ -438,7 +438,7 @@ const CourseDetail: React.FC = () => {
 
         <h2 style={{ marginBottom: 20 }}>Course Content</h2>
 
-        {modules.map((module) => (
+        {modules.map((module, moduleIndex) => (
 
           <div
             key={module.module_id}
@@ -457,14 +457,14 @@ const CourseDetail: React.FC = () => {
               }}
               onClick={() => toggleModule(module.module_id)}
             >
-              <strong>{module.module_title}</strong>
+              <strong>{moduleIndex + 1}. {module.module_title}</strong>
             </div>
 
             {openModules.has(module.module_id) && (
 
-              <ul style={{ padding: 20 }}>
+              <ul style={{ padding: 20, margin: 0, listStyle: "none" }}>
 
-                {module.lectures.map((lecture) => (
+                {module.lectures.map((lecture, lectureIndex) => (
 
                   <li
                     key={lecture.lecture_id}
@@ -475,7 +475,7 @@ const CourseDetail: React.FC = () => {
                     }}
                   >
 
-                    {lecture.title}
+                    <span>{lectureIndex + 1}. {lecture.title}</span>
 
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       {isEnrolled ? (
