@@ -69,15 +69,13 @@ const Navbar: React.FC = () => {
                     )}
                 </Link>
 
-                <div
-                className="nav-avatar"
-                    title="Logout"
-                    onClick={handleLogout}
-                >
+               <Link to="/profile" className="nav-avatar" title="Profile">
+    {getInitials(currentUser?.name || '')}
+</Link>
                     {getInitials(currentUser?.name || '')}
                 </div>
 
-            </div>
+            
         </nav>
     );
 };
