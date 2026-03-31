@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { supabase } from "../services/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import ReviewSection from "../components/course/ReviewSection";
@@ -8,6 +8,7 @@ interface Lecture {
   lecture_id: string;
   title: string;
   order_number: number;
+  video_url?: string;
 }
 
 interface Module {
@@ -26,10 +27,15 @@ interface Course {
   instructor_id: string;
 }
 
+const getThumbnailSrc = (thumbnailUrl?: string) => {
+  if (!thumbnailUrl) return "https://via.placeholder.com/400";
+  if (/^https?:\/\//i.test(thumbnailUrl) || thumbnailUrl.startsWith("/")) return thumbnailUrl;
+  return `/images/${thumbnailUrl}`;
+};
+
 const CourseDetail: React.FC = () => {
 
   const { courseId } = useParams();
-  const navigate = useNavigate();
   const { currentUser } = useAuth();
 
   // safely extract user id
@@ -82,7 +88,8 @@ const CourseDetail: React.FC = () => {
           lectures (
             lecture_id,
             title,
-            order_number
+            order_number,
+            video_url
           )
         `)
         .eq("course_id", courseId)
@@ -185,11 +192,7 @@ const CourseDetail: React.FC = () => {
         >
 
           <img
-            src={
-              course?.thumbnail_url
-                ? `/images/${course.thumbnail_url}`
-                : "https://via.placeholder.com/400"
-            }
+            src={getThumbnailSrc(course?.thumbnail_url)}
             style={{
               width: "100%",
               borderRadius: 8,
@@ -290,9 +293,13 @@ const CourseDetail: React.FC = () => {
 
                     {isEnrolled ? (
                       <button
-                        onClick={() =>
-                          navigate(`/course/${courseId}/lecture/${lecture.lecture_id}`)
-                        }
+                        onClick={() => {
+                          if (lecture.video_url) {
+                            window.open(lecture.video_url, "_blank", "noopener,noreferrer");
+                            return;
+                          }
+                          alert("Video URL not available for this lecture yet.");
+                        }}
                         style={{
                           background: "#2563eb",
                           border: "none",
