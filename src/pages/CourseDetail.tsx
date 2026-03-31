@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../services/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import ReviewSection from "../components/course/ReviewSection";
+import { getCourseThumbnail, getCourseFallbackByMeta } from "../utils/courseThumbnail";
 
 interface Lecture {
   lecture_id: string;
@@ -61,12 +62,6 @@ const getYouTubeEmbedUrl = (url: string) => {
   } catch {
     return "";
   }
-};
-
-const getThumbnailSrc = (thumbnailUrl?: string) => {
-  if (!thumbnailUrl) return "https://via.placeholder.com/400";
-  if (/^https?:\/\//i.test(thumbnailUrl) || thumbnailUrl.startsWith("/")) return thumbnailUrl;
-  return `/images/${thumbnailUrl}`;
 };
 
 const CourseDetail: React.FC = () => {
@@ -382,7 +377,15 @@ const CourseDetail: React.FC = () => {
         >
 
           <img
-            src={getThumbnailSrc(course?.thumbnail_url)}
+            src={getCourseThumbnail({
+              thumbnailUrl: course?.thumbnail_url,
+              title: course?.title
+            })}
+            alt={course?.title || "Course thumbnail"}
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = getCourseFallbackByMeta(course?.title);
+            }}
             style={{
               width: "100%",
               borderRadius: 8,
