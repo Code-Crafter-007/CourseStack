@@ -1,6 +1,20 @@
 import { supabase } from './supabaseClient';
 import type { UICourse, EnrolledCourse } from '../types/course';
 
+const ENROLLMENT_SELECT = `
+    course_id,
+    enrolled_at,
+    courses (
+        course_id,
+        title,
+        thumbnail_url,
+        price,
+        instructors (
+            users ( name )
+        )
+    )
+`;
+
 const getThumbnailSrc = (thumbnailUrl?: string | null): string => {
     if (!thumbnailUrl) {
         return 'https://images.unsplash.com/photo-1516116216624-53e697fedbea?q=80&w=800&auto=format&fit=crop';
@@ -13,47 +27,131 @@ const getThumbnailSrc = (thumbnailUrl?: string | null): string => {
 
 export const studentService = {
     async getEnrolledCourses(studentId: string): Promise<EnrolledCourse[]> {
-        const { data, error } = await supabase
-            .from('enrollments')
-            .select(`
-                course_id,
-                enrolled_at,
-                courses (
-                    course_id,
-                    title,
-                    thumbnail_url,
-                    price,
-                    instructors (
-                        users ( name )
-                    )
-                )
-            `)
-            .eq('user_id', studentId);
+        const loadEnrollments = async (column: 'user_id' | 'student_id') => {
+            return supabase.from('enrollments').select(ENROLLMENT_SELECT).eq(column, studentId);
+        };
 
-        if (error) {
-            console.error("Error fetching enrolled courses:", error.message);
+        let { data: enrollments, error: enrollmentError } = await loadEnrollments('user_id');
+
+        if (enrollmentError) {
+            const retry = await loadEnrollments('student_id');
+            enrollments = retry.data;
+            enrollmentError = retry.error;
+        }
+
+        if (enrollmentError) {
+            console.error('Error fetching enrolled courses:', enrollmentError.message);
             return [];
         }
 
-        // Map Supabase response to frontend EnrolledCourse interface
-        return (data || []).map(enrollment => {
-            const course = enrollment.courses as any;
-            if (!course) return null;
+        const safeEnrollments = enrollments || [];
+        const courseIds = safeEnrollments
+            .map((enrollment: any) => enrollment?.course_id)
+            .filter((courseId: string | null | undefined): courseId is string => Boolean(courseId));
 
-            const instructorName = course.instructors?.users?.name || 'Unknown Instructor';
+        const totalLecturesByCourse = new Map<string, number>();
+        const lectureToCourse = new Map<string, string>();
 
-            return {
-                id: course.course_id,
-                title: course.title,
-                instructor: instructorName,
-                thumbnail: getThumbnailSrc(course.thumbnail_url),
-                rating: 4.5, // Default placeholder
-                students: 0,
-                currentLecture: 1, // Default placeholder (can be expanded later with user_progress queries)
-                totalLectures: 10,
-                progress: 0
-            };
-        }).filter(Boolean) as EnrolledCourse[];
+        courseIds.forEach((courseId) => totalLecturesByCourse.set(courseId, 0));
+
+        if (courseIds.length > 0) {
+            const { data: moduleRows, error: moduleError } = await supabase
+                .from('modules')
+                .select('course_id,lectures ( lecture_id )')
+                .in('course_id', courseIds);
+
+            if (moduleError) {
+                console.error('Error fetching modules/lectures for progress:', moduleError.message);
+            } else {
+                (moduleRows || []).forEach((moduleRow: any) => {
+                    const courseId = moduleRow?.course_id as string | undefined;
+                    if (!courseId) return;
+
+                    const lectures = Array.isArray(moduleRow?.lectures) ? moduleRow.lectures : [];
+
+                    lectures.forEach((lecture: any) => {
+                        const lectureId = lecture?.lecture_id as string | undefined;
+                        if (!lectureId) return;
+
+                        lectureToCourse.set(lectureId, courseId);
+                        totalLecturesByCourse.set(courseId, (totalLecturesByCourse.get(courseId) || 0) + 1);
+                    });
+                });
+            }
+        }
+
+        const fetchWatchedLectureIds = async (column: 'user_id' | 'student_id'): Promise<string[]> => {
+            const withWatchedFilter = await supabase
+                .from('user_progress')
+                .select('lecture_id,watched')
+                .eq(column, studentId)
+                .eq('watched', true);
+
+            if (!withWatchedFilter.error) {
+                return (withWatchedFilter.data || [])
+                    .map((row: any) => row?.lecture_id)
+                    .filter((lectureId: string | null | undefined): lectureId is string => Boolean(lectureId));
+            }
+
+            const fallbackWithoutWatched = await supabase
+                .from('user_progress')
+                .select('lecture_id')
+                .eq(column, studentId);
+
+            if (fallbackWithoutWatched.error) {
+                throw fallbackWithoutWatched.error;
+            }
+
+            return (fallbackWithoutWatched.data || [])
+                .map((row: any) => row?.lecture_id)
+                .filter((lectureId: string | null | undefined): lectureId is string => Boolean(lectureId));
+        };
+
+        let watchedLectureIds: string[] = [];
+        try {
+            watchedLectureIds = await fetchWatchedLectureIds('user_id');
+        } catch {
+            try {
+                watchedLectureIds = await fetchWatchedLectureIds('student_id');
+            } catch (progressError: any) {
+                console.error('Error fetching user progress:', progressError?.message || progressError);
+            }
+        }
+
+        const completedByCourse = new Map<string, number>();
+
+        watchedLectureIds.forEach((lectureId) => {
+            const courseId = lectureToCourse.get(lectureId);
+            if (!courseId) return;
+            completedByCourse.set(courseId, (completedByCourse.get(courseId) || 0) + 1);
+        });
+
+        return safeEnrollments
+            .map((enrollment: any) => {
+                const course = enrollment?.courses as any;
+                if (!course) return null;
+
+                const courseId = course.course_id as string;
+                const instructorName = course.instructors?.users?.name || 'Unknown Instructor';
+                const totalLectures = totalLecturesByCourse.get(courseId) || 0;
+                const completedLectures = Math.min(completedByCourse.get(courseId) || 0, totalLectures);
+                const progress = totalLectures > 0 ? Math.round((completedLectures / totalLectures) * 100) : 0;
+                const currentLecture = totalLectures > 0 ? Math.min(completedLectures + 1, totalLectures) : 0;
+
+                return {
+                    id: courseId,
+                    title: course.title,
+                    instructor: instructorName,
+                    thumbnail: getThumbnailSrc(course.thumbnail_url),
+                    rating: 4.5,
+                    students: 0,
+                    currentLecture,
+                    totalLectures,
+                    completedLectures,
+                    progress
+                };
+            })
+            .filter(Boolean) as EnrolledCourse[];
     },
 
     async getRecommendedCourses(): Promise<UICourse[]> {

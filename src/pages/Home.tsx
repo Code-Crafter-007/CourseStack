@@ -52,9 +52,11 @@ const Home: React.FC = () => {
     const overallProgress = totalEnrolled > 0 
         ? Math.round(enrolledCourses.reduce((acc, curr) => acc + (curr.progress || 0), 0) / totalEnrolled) 
         : 0;
-    
-    // Placeholder for completed logic until we have full progress tracking
-    const totalCompleted = 0; 
+
+    const totalCompleted = enrolledCourses.reduce(
+        (acc, curr) => acc + (curr.completedLectures || 0),
+        0
+    );
 
     if (isLoading) {
         return (

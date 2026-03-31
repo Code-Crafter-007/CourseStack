@@ -67,6 +67,7 @@ export interface UserProgress {
 export interface EnrolledCourse extends UICourse {
     currentLecture: number;
     totalLectures: number;
+    completedLectures: number;
     progress: number;
 }
 
