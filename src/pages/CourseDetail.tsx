@@ -27,6 +27,36 @@ interface Course {
   instructor_id: string;
 }
 
+const normalizeVideoUrl = (raw?: string) => {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  return `https://${trimmed}`;
+};
+
+const getYouTubeEmbedUrl = (url: string) => {
+  const normalized = normalizeVideoUrl(url);
+  try {
+    const parsed = new URL(normalized);
+    const host = parsed.hostname.replace(/^www\./i, "").toLowerCase();
+
+    if (host === "youtu.be") {
+      const id = parsed.pathname.replace("/", "");
+      return id ? `https://www.youtube.com/embed/${id}` : "";
+    }
+
+    if (host.includes("youtube.com")) {
+      const id = parsed.searchParams.get("v");
+      return id ? `https://www.youtube.com/embed/${id}` : "";
+    }
+
+    return "";
+  } catch {
+    return "";
+  }
+};
+
 const getThumbnailSrc = (thumbnailUrl?: string) => {
   if (!thumbnailUrl) return "https://via.placeholder.com/400";
   if (/^https?:\/\//i.test(thumbnailUrl) || thumbnailUrl.startsWith("/")) return thumbnailUrl;
@@ -47,6 +77,7 @@ const CourseDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [openModule, setOpenModule] = useState<string | null>(null);
+  const [selectedLecture, setSelectedLecture] = useState<{ title: string; videoUrl: string } | null>(null);
 
   useEffect(() => {
 
@@ -294,8 +325,12 @@ const CourseDetail: React.FC = () => {
                     {isEnrolled ? (
                       <button
                         onClick={() => {
-                          if (lecture.video_url) {
-                            window.open(lecture.video_url, "_blank", "noopener,noreferrer");
+                          const videoUrl = normalizeVideoUrl(lecture.video_url);
+                          if (videoUrl) {
+                            setSelectedLecture({
+                              title: lecture.title,
+                              videoUrl
+                            });
                             return;
                           }
                           alert("Video URL not available for this lecture yet.");
@@ -356,6 +391,60 @@ const CourseDetail: React.FC = () => {
       <div style={{ padding: 60, borderTop: "1px solid #333" }}>
     {courseId && <ReviewSection courseId={courseId} />}
 </div>
+
+      {selectedLecture && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+            padding: 20
+          }}
+          onClick={() => setSelectedLecture(null)}
+        >
+          <div
+            style={{
+              width: "min(980px, 95vw)",
+              background: "#111",
+              border: "1px solid #333",
+              borderRadius: 10,
+              padding: 16
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <strong>{selectedLecture.title}</strong>
+              <button
+                onClick={() => setSelectedLecture(null)}
+                style={{ background: "#222", color: "#fff", border: "1px solid #444", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+              >
+                Close
+              </button>
+            </div>
+
+            {getYouTubeEmbedUrl(selectedLecture.videoUrl) ? (
+              <iframe
+                title={selectedLecture.title}
+                src={getYouTubeEmbedUrl(selectedLecture.videoUrl)}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                style={{ width: "100%", aspectRatio: "16 / 9", border: "none", borderRadius: 8 }}
+              />
+            ) : (
+              <video
+                controls
+                src={selectedLecture.videoUrl}
+                style={{ width: "100%", borderRadius: 8, maxHeight: "70vh", background: "#000" }}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
 
     </div>
