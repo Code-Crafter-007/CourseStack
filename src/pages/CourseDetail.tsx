@@ -76,8 +76,20 @@ const CourseDetail: React.FC = () => {
   const [instructorName, setInstructorName] = useState("");
   const [loading, setLoading] = useState(true);
   const [isEnrolled, setIsEnrolled] = useState(false);
-  const [openModule, setOpenModule] = useState<string | null>(null);
+  const [openModules, setOpenModules] = useState<Set<string>>(new Set());
   const [selectedLecture, setSelectedLecture] = useState<{ title: string; videoUrl: string } | null>(null);
+
+  const toggleModule = (moduleId: string) => {
+    setOpenModules((prev) => {
+      const next = new Set(prev);
+      if (next.has(moduleId)) {
+        next.delete(moduleId);
+      } else {
+        next.add(moduleId);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
 
@@ -294,18 +306,12 @@ const CourseDetail: React.FC = () => {
                 cursor: "pointer",
                 background: "#111"
               }}
-              onClick={() =>
-                setOpenModule(
-                  openModule === module.module_id
-                    ? null
-                    : module.module_id
-                )
-              }
+              onClick={() => toggleModule(module.module_id)}
             >
               <strong>{module.module_title}</strong>
             </div>
 
-            {openModule === module.module_id && (
+            {openModules.has(module.module_id) && (
 
               <ul style={{ padding: 20 }}>
 
