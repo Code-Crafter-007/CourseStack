@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../services/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import ReviewSection from "../components/course/ReviewSection";
@@ -72,7 +72,9 @@ const getThumbnailSrc = (thumbnailUrl?: string) => {
 const CourseDetail: React.FC = () => {
 
   const { courseId } = useParams();
+  const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const courseContentRef = useRef<HTMLDivElement | null>(null);
 
   // safely extract user id
   const userId = (currentUser as any)?.user_id;
@@ -239,33 +241,23 @@ const CourseDetail: React.FC = () => {
       return;
     }
 
-    const firstModule = [...modules].sort((a, b) => a.order_number - b.order_number)[0];
-    if (!firstModule) {
-      alert("No content available yet for this course.");
-      return;
-    }
+    const sortedModules = [...modules].sort((a, b) => a.order_number - b.order_number);
+    const moduleToOpen =
+      sortedModules.find((module) =>
+        [...(module.lectures || [])]
+          .sort((a, b) => a.order_number - b.order_number)
+          .some((lecture) => !watchedLectureIds.has(lecture.lecture_id))
+      ) || sortedModules[0];
 
-    // Keep the first module open so learners can continue from content immediately.
+    if (!moduleToOpen) return;
+
     setOpenModules((prev) => {
       const next = new Set(prev);
-      next.add(firstModule.module_id);
+      next.add(moduleToOpen.module_id);
       return next;
     });
 
-    const firstLectureWithVideo = [...(firstModule.lectures || [])]
-      .sort((a, b) => a.order_number - b.order_number)
-      .find((lecture) => normalizeVideoUrl(lecture.video_url));
-
-    if (!firstLectureWithVideo) {
-      alert("Lectures are listed, but video links are not available yet.");
-      return;
-    }
-
-    setSelectedLecture({
-      lectureId: firstLectureWithVideo.lecture_id,
-      title: firstLectureWithVideo.title,
-      videoUrl: normalizeVideoUrl(firstLectureWithVideo.video_url)
-    });
+    courseContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const markLectureAsWatched = async (lectureId: string) => {
@@ -340,6 +332,22 @@ const CourseDetail: React.FC = () => {
           borderBottom: "1px solid #333"
         }}
       >
+
+        <div style={{ position: "absolute", marginTop: -26 }}>
+          <button
+            onClick={() => navigate("/dashboard")}
+            style={{
+              background: "#111",
+              border: "1px solid #333",
+              borderRadius: 6,
+              color: "#fff",
+              padding: "8px 12px",
+              cursor: "pointer"
+            }}
+          >
+            Back to Home
+          </button>
+        </div>
 
         <div style={{ flex: 2 }}>
 
@@ -422,7 +430,7 @@ const CourseDetail: React.FC = () => {
 
       {/* COURSE CONTENT */}
 
-      <div style={{ padding: 60 }}>
+      <div ref={courseContentRef} style={{ padding: 60 }}>
 
         <h2 style={{ marginBottom: 20 }}>Course Content</h2>
 
