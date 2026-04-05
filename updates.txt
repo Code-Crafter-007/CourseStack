@@ -1,0 +1,11 @@
+authentication fix : issue ui doesnt load after login and then reloaded -> it stucks
+THIS WAS LOADING issue that you were ignoring, u used to clear local data and were logging in again.
+
+
+
+Supabase edge function fix : Added session_id on successfull checkout redirection for further payment Verification.
+
+session_id: cs_live.... for test cs_test....
+
+Success Payment Verification: On redirect of successfull url, it stuck and showed loading... -> fixed and now it adds course to user's my course things.
+

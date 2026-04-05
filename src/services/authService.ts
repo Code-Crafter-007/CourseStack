@@ -34,12 +34,13 @@ export const authService = {
 
     // Fetch the extended user profile (to get the role)
     async getUserProfile(userId: string) {
+        console.log("[authService] getUserProfile called for user:", userId);
         const { data, error } = await supabase
             .from('users')
             .select('*')
             .eq('user_id', userId)
             .single();
-
+        console.log("[authService] getUserProfile returned data:", data, "error:", error);
         if (error) {
             console.error('Error fetching user profile:', error);
             return null;

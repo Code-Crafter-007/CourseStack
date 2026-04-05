@@ -7,13 +7,14 @@ import Home from '../pages/Home';
 import TutorDashboard from '../pages/TutorDashboard';
 import AdminPanel from '../pages/AdminPanel';
 import CourseDetail from '../pages/CourseDetail';
-
-import type { UserRole } from '../types';
 import WishlistPage from '../pages/WishlistPage';
 import ProfilePage from '../pages/ProfilePage';
 
+import type { UserRole } from '../types';
 
-// Protected Route Wrapper
+
+
+// ✅ Protected Route
 const ProtectedRoute = ({
     children,
     allowedRoles
@@ -21,7 +22,6 @@ const ProtectedRoute = ({
     children: React.ReactNode,
     allowedRoles?: UserRole[]
 }) => {
-
     const { currentUser, userRole, loading } = useAuth();
 
     if (loading) {
@@ -48,10 +48,8 @@ const ProtectedRoute = ({
     return <>{children}</>;
 };
 
-
-// Root redirect based on role
+// ✅ Root redirect based on role
 const RootRedirect = () => {
-
     const { currentUser, userRole, loading } = useAuth();
 
     if (loading) {
@@ -72,11 +70,11 @@ const RootRedirect = () => {
     }
 };
 
-
+// ✅ Main Routes
 const AppRoutes: React.FC = () => {
+
     return (
         <Routes>
-
             {/* Root */}
             <Route path="/" element={<RootRedirect />} />
 
@@ -138,7 +136,6 @@ const AppRoutes: React.FC = () => {
 
             {/* Catch all */}
             <Route path="*" element={<RootRedirect />} />
-
         </Routes>
     );
 };

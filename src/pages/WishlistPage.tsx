@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, Heart } from 'lucide-react';
+import { Trash2, Heart, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
 
@@ -13,6 +13,25 @@ const WishlistPage: React.FC = () => {
 
     return (
         <div style={{ maxWidth: '860px', margin: '0 auto', padding: '2rem' }}>
+            <button
+                onClick={() => navigate(-1)}
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: 'none',
+                    border: 'none',
+                    color: '#aaa',
+                    cursor: 'pointer',
+                    marginBottom: '1rem',
+                    fontSize: '1rem',
+                    padding: 0,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = '#aaa')}
+            >
+                <ArrowLeft size={20} /> Back
+            </button>
             <h1 style={{ fontSize: '1.8rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Heart size={24} color="#f87171" fill="#f87171" />
                 My Wishlist ({wishlist.length})

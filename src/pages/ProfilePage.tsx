@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import CourseCard from '../components/course/CourseCard';
@@ -90,6 +91,25 @@ const ProfilePage: React.FC = () => {
             <Navbar />
 
             <div className="home-content">
+                <button
+                    onClick={() => navigate(-1)}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: 'none',
+                        border: 'none',
+                        color: '#aaa',
+                        cursor: 'pointer',
+                        marginBottom: '1rem',
+                        fontSize: '1rem',
+                        padding: 0,
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = '#aaa')}
+                >
+                    <ArrowLeft size={20} /> Back
+                </button>
 
                 {/* Profile Header Card */}
                 <div className="profile-hero glass-card">

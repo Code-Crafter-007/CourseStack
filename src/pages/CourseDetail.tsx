@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { supabase } from "../services/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import ReviewSection from "../components/course/ReviewSection";
@@ -68,11 +69,12 @@ const CourseDetail: React.FC = () => {
 
   const { courseId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { currentUser } = useAuth();
   const courseContentRef = useRef<HTMLDivElement | null>(null);
 
   // safely extract user id
-  const userId = (currentUser as any)?.user_id;
+  const userId = currentUser?.id || (currentUser as any)?.user_id;
 
   const [course, setCourse] = useState<Course | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
@@ -82,6 +84,7 @@ const CourseDetail: React.FC = () => {
   const [openModules, setOpenModules] = useState<Set<string>>(new Set());
   const [selectedLecture, setSelectedLecture] = useState<{ lectureId: string; title: string; videoUrl: string } | null>(null);
   const [watchedLectureIds, setWatchedLectureIds] = useState<Set<string>>(new Set());
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const toggleModule = (moduleId: string) => {
     setOpenModules((prev) => {
@@ -96,10 +99,33 @@ const CourseDetail: React.FC = () => {
   };
 
   useEffect(() => {
+    const paymentStatus = searchParams.get("payment");
+    console.log(searchParams.get("session_id"))
+    if (paymentStatus !== "success" || !courseId) return;
+
+    // 👇 Wait for userId to be available (auth might still be loading)
+    if (!userId) return; // useEffect will re-run when userId becomes available
+
+    const autoEnroll = async () => {
+      const { error } = await supabase.from("enrollments").insert({
+        user_id: userId,
+        course_id: courseId
+      });
+
+      if (!error || error.code === '23505') {
+        setIsEnrolled(true);
+        navigate(`/profile`, { replace: true });
+      }
+    };
+
+    autoEnroll();
+  }, [searchParams, userId, courseId, navigate]); // userId in deps means it retries when auth loads
+
+  useEffect(() => {
 
     const fetchCourseData = async () => {
 
-      if (!courseId || !userId) return;
+      if (!courseId) return;
 
       /* COURSE INFO */
 
@@ -149,7 +175,7 @@ const CourseDetail: React.FC = () => {
           .flatMap((module: any) => (module.lectures || []).map((lecture: any) => lecture.lecture_id))
           .filter((lectureId: string | undefined) => Boolean(lectureId));
 
-        if (lectureIds.length > 0) {
+        if (lectureIds.length > 0 && userId) {
           const loadProgress = async (column: "user_id" | "student_id") => {
             const watchedRows = await supabase
               .from("user_progress")
@@ -185,17 +211,18 @@ const CourseDetail: React.FC = () => {
         }
       }
 
-      /* ENROLLMENT CHECK */
+      if (userId) {
+        /* ENROLLMENT CHECK */
+        const { data: enrollment } = await supabase
+          .from("enrollments")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("course_id", courseId)
+          .maybeSingle();
 
-      const { data: enrollment } = await supabase
-        .from("enrollments")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("course_id", courseId)
-        .maybeSingle();
-
-      if (enrollment) {
-        setIsEnrolled(true);
+        if (enrollment) {
+          setIsEnrolled(true);
+        }
       }
 
       setLoading(false);
@@ -216,17 +243,35 @@ const CourseDetail: React.FC = () => {
       return;
     }
 
-    const { error } = await supabase
-      .from("enrollments")
-      .insert({
-        user_id: userId,
-        course_id: courseId
+    setIsProcessing(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: {
+          courseId,
+          userId,
+        },
       });
 
-    if (error) {
-      console.error("Enrollment failed:", error);
-    } else {
-      setIsEnrolled(true);
+      if (error) {
+        throw new Error(error.message || "Failed to invoke function");
+      }
+
+      if (data?.url) {
+        window.location.href = data.url;
+      } else if (data?.error) {
+        alert("Stripe Error: " + data.error);
+        setIsProcessing(false);
+      } else {
+        console.error("No checkout URL returned:", data);
+        alert("Failed to generate checkout link.");
+        setIsProcessing(false);
+      }
+    } catch (err: any) {
+      console.error("Checkout failed:", err);
+      // Supabase's FunctionHttpError usually has detailed error in body or message
+      alert(`Checkout Error: ${err.message || 'Something went wrong during checkout.'}`);
+      setIsProcessing(false);
     }
   };
 
@@ -332,19 +377,24 @@ const CourseDetail: React.FC = () => {
         }}
       >
 
-        <div style={{ position: "absolute", marginTop: -26 }}>
+        <div style={{ position: "absolute", marginTop: -30 }}>
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate(-1)}
             style={{
-              background: "#111",
-              border: "1px solid #333",
-              borderRadius: 6,
-              color: "#fff",
-              padding: "8px 12px",
-              cursor: "pointer"
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'none',
+              border: 'none',
+              color: '#aaa',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              padding: 0,
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#aaa')}
           >
-            Back to Home
+            <ArrowLeft size={20} /> Back
           </button>
         </div>
 
@@ -415,19 +465,21 @@ const CourseDetail: React.FC = () => {
           ) : (
             <button
               onClick={handleEnroll}
+              disabled={isProcessing}
               style={{
                 width: "100%",
                 marginTop: 15,
                 padding: 12,
-                background: "#a435f0",
+                background: isProcessing ? "#9333ea" : "#a435f0",
                 border: "none",
                 borderRadius: 6,
                 color: "white",
                 fontWeight: "bold",
-                cursor: "pointer"
+                cursor: isProcessing ? "not-allowed" : "pointer",
+                opacity: isProcessing ? 0.7 : 1
               }}
             >
-              Enroll Now
+              {isProcessing ? "Processing..." : "Enroll Now"}
             </button>
           )}
 
@@ -455,12 +507,22 @@ const CourseDetail: React.FC = () => {
             <div
               style={{
                 padding: 20,
-                cursor: "pointer",
-                background: "#111"
+                cursor: isEnrolled ? "pointer" : "not-allowed",
+                background: "#111",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center"
               }}
-              onClick={() => toggleModule(module.module_id)}
+              onClick={() => {
+                if (isEnrolled) {
+                  toggleModule(module.module_id);
+                } else {
+                  alert("Please enroll in the course to unlock its contents.");
+                }
+              }}
             >
               <strong>{moduleIndex + 1}. {module.module_title}</strong>
+              {!isEnrolled && <span style={{ color: "#f87171", fontSize: "0.9rem", fontWeight: "bold" }}>🔒 Locked</span>}
             </div>
 
             {openModules.has(module.module_id) && (
@@ -565,8 +627,8 @@ const CourseDetail: React.FC = () => {
       </div>
 
       <div style={{ padding: 60, borderTop: "1px solid #333" }}>
-    {courseId && <ReviewSection courseId={courseId} />}
-</div>
+        {courseId && <ReviewSection courseId={courseId} />}
+      </div>
 
       {selectedLecture && (
         <div

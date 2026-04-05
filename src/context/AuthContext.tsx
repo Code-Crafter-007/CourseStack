@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { authService } from '../services/authService';
 import type { User as AppUser, UserRole } from '../types';
@@ -25,27 +25,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
     const [userRole, setUserRole] = useState<UserRole | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
-    const isFetching = useRef(false); // 👈 ADD THIS - prevents double fetching
 
-    const fetchAndSetProfile = async (userId: string, mounted: boolean) => {
-        // 👇 If already fetching, skip
-        if (isFetching.current) return;
-        isFetching.current = true;
-
+    const fetchAndSetProfile = async (userId: string, isMounted: () => boolean) => {
+        console.log("[AuthContext] fetchAndSetProfile called for user:", userId);
         try {
+            console.log("[AuthContext] Requesting profile from authService...");
             const profile = await authService.getUserProfile(userId);
-            if (profile && mounted) {
+            console.log("[AuthContext] Received profile:", profile);
+
+            if (profile && isMounted()) {
                 const normalizedProfile = {
                     ...profile,
                     id: (profile as any).id ?? (profile as any).user_id ?? userId
                 };
+                console.log("[AuthContext] Setting currentUser and userRole...", normalizedProfile);
                 setCurrentUser(normalizedProfile as AppUser);
                 setUserRole(profile.role);
+            } else {
+                console.log("[AuthContext] Skipping set state. profile exists?", !!profile, "isMounted?", isMounted());
             }
         } catch (err) {
-            console.warn("Error fetching user profile:", err);
-        } finally {
-            isFetching.current = false;
+            console.warn("[AuthContext] Error fetching user profile:", err);
         }
     };
 
@@ -53,7 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
-                await fetchAndSetProfile(session.user.id, true);
+                await fetchAndSetProfile(session.user.id, () => true);
             }
         } catch (error) {
             console.error("Error refreshing profile manually:", error);
@@ -61,40 +61,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     useEffect(() => {
+        console.log("[AuthContext] Initializing useEffect...");
         let mounted = true;
-
-        const initAuth = async () => {
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session?.user && mounted) {
-                    await fetchAndSetProfile(session.user.id, mounted);
-                }
-            } catch (err) {
-                console.warn("Auth initialization error:", err);
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        };
-
-        initAuth();
+        const isMounted = () => mounted;
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'INITIAL_SESSION') return;
+            console.log("[AuthContext] onAuthStateChange event:", event);
 
-            if (session?.user && mounted) {
-                await fetchAndSetProfile(session.user.id, mounted);
-            } else if (!session?.user && mounted) {
-                setCurrentUser(null);
-                setUserRole(null);
-                isFetching.current = false; // 👈 Reset on logout
+            if (session?.user) {
+                console.log("[AuthContext] User found. Queuing profile fetch via macro-task to prevent lock deadlock...");
+                setTimeout(async () => {
+                    await fetchAndSetProfile(session.user.id, isMounted);
+                    // ONLY set loading to false AFTER the profile has been fully fetched and set!
+                    if (isMounted()) {
+                        console.log("[AuthContext] Setting loading to false after profile fetch");
+                        setLoading(false);
+                    }
+                }, 0);
+            } else {
+                console.log("[AuthContext] No user found. Clearing state...");
+                if (isMounted()) {
+                    setCurrentUser(null);
+                    setUserRole(null);
+                    console.log("[AuthContext] Setting loading to false (no user)");
+                    setLoading(false);
+                }
             }
-
-            // 👇 Handle loading on sign in/out events
-            if (event === 'SIGNED_OUT' && mounted) setLoading(false);
         });
 
+        // Safe fallback ONLY if onAuthStateChange fails to fire within 1 second.
+        // This avoids overlapping getSession() deadlocks during the exact tick the client initializes.
+        const watchdog = setTimeout(() => {
+            if (isMounted() && loading) {
+                console.log("[AuthContext] Watchdog triggered. Falling back to getSession()...");
+                supabase.auth.getSession().then(({ data: { session } }) => {
+                    if (session?.user) {
+                        fetchAndSetProfile(session.user.id, isMounted).then(() => {
+                            if (isMounted()) setLoading(false);
+                        });
+                    } else {
+                        if (isMounted()) setLoading(false);
+                    }
+                });
+            }
+        }, 1000);
+
         return () => {
+            console.log("[AuthContext] Cleaning up...");
             mounted = false;
+            clearTimeout(watchdog);
             subscription.unsubscribe();
         };
     }, []);
@@ -109,7 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return (
         <AuthContext.Provider value={value}>
-            {!loading && children}
+            {children}
         </AuthContext.Provider>
     );
-};  
+};
