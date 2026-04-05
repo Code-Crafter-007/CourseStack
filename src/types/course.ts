@@ -67,6 +67,7 @@ export interface UserProgress {
 export interface EnrolledCourse extends UICourse {
     currentLecture: number;
     totalLectures: number;
+    completedLectures: number;
     progress: number;
 }
 
@@ -76,7 +77,24 @@ export interface UICourse {
     title: string;
     instructor: string;
     thumbnail: string;
+    category?: string;
     rating: number;
     students: number;
     progress?: number;
+}
+
+export interface TutorCourseInput {
+    title: string;
+    description: string;
+    category_id: number;
+    price: number;
+    thumbnail_url: string;
+}
+
+export interface TutorCourseFormState {
+    title: string;
+    description: string;
+    category_id: string;
+    price: string;
+    thumbnail_url: string;
 }

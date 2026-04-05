@@ -1,13 +1,22 @@
-import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { supabase } from "../services/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 import ReviewSection from "../components/course/ReviewSection";
+import { getCourseThumbnail, getCourseFallbackByMeta } from "../utils/courseThumbnail";
 
 interface Lecture {
   lecture_id: string;
   title: string;
   order_number: number;
+  video_url?: string;
+}
+
+interface ProgressRow {
+  progress_id?: string;
+  lecture_id: string;
+  watched?: boolean;
 }
 
 interface Module {
@@ -26,27 +35,97 @@ interface Course {
   instructor_id: string;
 }
 
+const normalizeVideoUrl = (raw?: string) => {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  return `https://${trimmed}`;
+};
+
+const getYouTubeEmbedUrl = (url: string) => {
+  const normalized = normalizeVideoUrl(url);
+  try {
+    const parsed = new URL(normalized);
+    const host = parsed.hostname.replace(/^www\./i, "").toLowerCase();
+
+    if (host === "youtu.be") {
+      const id = parsed.pathname.replace("/", "");
+      return id ? `https://www.youtube.com/embed/${id}` : "";
+    }
+
+    if (host.includes("youtube.com")) {
+      const id = parsed.searchParams.get("v");
+      return id ? `https://www.youtube.com/embed/${id}` : "";
+    }
+
+    return "";
+  } catch {
+    return "";
+  }
+};
+
 const CourseDetail: React.FC = () => {
 
   const { courseId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { currentUser } = useAuth();
+  const courseContentRef = useRef<HTMLDivElement | null>(null);
 
   // safely extract user id
-  const userId = (currentUser as any)?.user_id;
+  const userId = currentUser?.id || (currentUser as any)?.user_id;
 
   const [course, setCourse] = useState<Course | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [instructorName, setInstructorName] = useState("");
   const [loading, setLoading] = useState(true);
   const [isEnrolled, setIsEnrolled] = useState(false);
-  const [openModule, setOpenModule] = useState<string | null>(null);
+  const [openModules, setOpenModules] = useState<Set<string>>(new Set());
+  const [selectedLecture, setSelectedLecture] = useState<{ lectureId: string; title: string; videoUrl: string } | null>(null);
+  const [watchedLectureIds, setWatchedLectureIds] = useState<Set<string>>(new Set());
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const toggleModule = (moduleId: string) => {
+    setOpenModules((prev) => {
+      const next = new Set(prev);
+      if (next.has(moduleId)) {
+        next.delete(moduleId);
+      } else {
+        next.add(moduleId);
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const paymentStatus = searchParams.get("payment");
+    console.log(searchParams.get("session_id"))
+    if (paymentStatus !== "success" || !courseId) return;
+
+    // 👇 Wait for userId to be available (auth might still be loading)
+    if (!userId) return; // useEffect will re-run when userId becomes available
+
+    const autoEnroll = async () => {
+      const { error } = await supabase.from("enrollments").insert({
+        user_id: userId,
+        course_id: courseId
+      });
+
+      if (!error || error.code === '23505') {
+        setIsEnrolled(true);
+        navigate(`/profile`, { replace: true });
+      }
+    };
+
+    autoEnroll();
+  }, [searchParams, userId, courseId, navigate]); // userId in deps means it retries when auth loads
 
   useEffect(() => {
 
     const fetchCourseData = async () => {
 
-      if (!courseId || !userId) return;
+      if (!courseId) return;
 
       /* COURSE INFO */
 
@@ -82,7 +161,8 @@ const CourseDetail: React.FC = () => {
           lectures (
             lecture_id,
             title,
-            order_number
+            order_number,
+            video_url
           )
         `)
         .eq("course_id", courseId)
@@ -90,19 +170,59 @@ const CourseDetail: React.FC = () => {
 
       if (modulesData) {
         setModules(modulesData);
+
+        const lectureIds = modulesData
+          .flatMap((module: any) => (module.lectures || []).map((lecture: any) => lecture.lecture_id))
+          .filter((lectureId: string | undefined) => Boolean(lectureId));
+
+        if (lectureIds.length > 0 && userId) {
+          const loadProgress = async (column: "user_id" | "student_id") => {
+            const watchedRows = await supabase
+              .from("user_progress")
+              .select("lecture_id,watched")
+              .eq(column, userId)
+              .in("lecture_id", lectureIds)
+              .eq("watched", true);
+
+            if (!watchedRows.error) {
+              return watchedRows;
+            }
+
+            const fallbackRows = await supabase
+              .from("user_progress")
+              .select("lecture_id")
+              .eq(column, userId)
+              .in("lecture_id", lectureIds);
+
+            return fallbackRows;
+          };
+
+          let progressResult = await loadProgress("user_id");
+          if (progressResult.error) {
+            progressResult = await loadProgress("student_id");
+          }
+
+          if (!progressResult.error) {
+            const watchedIds = (progressResult.data || [])
+              .map((row: any) => row.lecture_id as string)
+              .filter(Boolean);
+            setWatchedLectureIds(new Set(watchedIds));
+          }
+        }
       }
 
-      /* ENROLLMENT CHECK */
+      if (userId) {
+        /* ENROLLMENT CHECK */
+        const { data: enrollment } = await supabase
+          .from("enrollments")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("course_id", courseId)
+          .maybeSingle();
 
-      const { data: enrollment } = await supabase
-        .from("enrollments")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("course_id", courseId)
-        .maybeSingle();
-
-      if (enrollment) {
-        setIsEnrolled(true);
+        if (enrollment) {
+          setIsEnrolled(true);
+        }
       }
 
       setLoading(false);
@@ -123,17 +243,118 @@ const CourseDetail: React.FC = () => {
       return;
     }
 
-    const { error } = await supabase
-      .from("enrollments")
-      .insert({
-        user_id: userId,
-        course_id: courseId
+    setIsProcessing(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: {
+          courseId,
+          userId,
+        },
       });
 
-    if (error) {
-      console.error("Enrollment failed:", error);
-    } else {
-      setIsEnrolled(true);
+      if (error) {
+        throw new Error(error.message || "Failed to invoke function");
+      }
+
+      if (data?.url) {
+        window.location.href = data.url;
+      } else if (data?.error) {
+        alert("Stripe Error: " + data.error);
+        setIsProcessing(false);
+      } else {
+        console.error("No checkout URL returned:", data);
+        alert("Failed to generate checkout link.");
+        setIsProcessing(false);
+      }
+    } catch (err: any) {
+      console.error("Checkout failed:", err);
+      // Supabase's FunctionHttpError usually has detailed error in body or message
+      alert(`Checkout Error: ${err.message || 'Something went wrong during checkout.'}`);
+      setIsProcessing(false);
+    }
+  };
+
+  const handleContinueLearning = () => {
+    if (!modules.length) {
+      alert("No content available yet for this course.");
+      return;
+    }
+
+    const sortedModules = [...modules].sort((a, b) => a.order_number - b.order_number);
+    const moduleToOpen =
+      sortedModules.find((module) =>
+        [...(module.lectures || [])]
+          .sort((a, b) => a.order_number - b.order_number)
+          .some((lecture) => !watchedLectureIds.has(lecture.lecture_id))
+      ) || sortedModules[0];
+
+    if (!moduleToOpen) return;
+
+    setOpenModules((prev) => {
+      const next = new Set(prev);
+      next.add(moduleToOpen.module_id);
+      return next;
+    });
+
+    courseContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const setLectureWatchedState = async (lectureId: string, watched: boolean) => {
+    if (!lectureId || !userId) return;
+
+    setWatchedLectureIds((prev) => {
+      const next = new Set(prev);
+      if (watched) {
+        next.add(lectureId);
+      } else {
+        next.delete(lectureId);
+      }
+      return next;
+    });
+
+    const persist = async (column: "user_id" | "student_id") => {
+      const existing = await supabase
+        .from("user_progress")
+        .select("progress_id")
+        .eq(column, userId)
+        .eq("lecture_id", lectureId)
+        .maybeSingle();
+
+      if (existing.error) {
+        throw existing.error;
+      }
+
+      if ((existing.data as ProgressRow | null)?.progress_id) {
+        const updateResult = await supabase
+          .from("user_progress")
+          .update({ watched, watched_at: watched ? new Date().toISOString() : null })
+          .eq("progress_id", (existing.data as ProgressRow).progress_id);
+
+        if (updateResult.error) throw updateResult.error;
+        return;
+      }
+
+      const insertResult = await supabase
+        .from("user_progress")
+        .insert({
+          [column]: userId,
+          lecture_id: lectureId,
+          watched,
+          watched_at: watched ? new Date().toISOString() : null
+        });
+
+      if (insertResult.error) throw insertResult.error;
+    };
+
+    try {
+      await persist("user_id");
+    } catch {
+      try {
+        await persist("student_id");
+      } catch (error) {
+        console.error("Failed to save lecture progress:", error);
+      }
     }
   };
 
@@ -155,6 +376,27 @@ const CourseDetail: React.FC = () => {
           borderBottom: "1px solid #333"
         }}
       >
+
+        <div style={{ position: "absolute", marginTop: -30 }}>
+          <button
+            onClick={() => navigate(-1)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'none',
+              border: 'none',
+              color: '#aaa',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              padding: 0,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#aaa')}
+          >
+            <ArrowLeft size={20} /> Back
+          </button>
+        </div>
 
         <div style={{ flex: 2 }}>
 
@@ -185,11 +427,15 @@ const CourseDetail: React.FC = () => {
         >
 
           <img
-            src={
-              course?.thumbnail_url
-                ? `/images/${course.thumbnail_url}`
-                : "https://via.placeholder.com/400"
-            }
+            src={getCourseThumbnail({
+              thumbnailUrl: course?.thumbnail_url,
+              title: course?.title
+            })}
+            alt={course?.title || "Course thumbnail"}
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = getCourseFallbackByMeta(course?.title);
+            }}
             style={{
               width: "100%",
               borderRadius: 8,
@@ -201,6 +447,7 @@ const CourseDetail: React.FC = () => {
 
           {isEnrolled ? (
             <button
+              onClick={handleContinueLearning}
               style={{
                 width: "100%",
                 marginTop: 15,
@@ -209,27 +456,30 @@ const CourseDetail: React.FC = () => {
                 border: "none",
                 borderRadius: 6,
                 color: "white",
-                fontWeight: "bold"
-              }}
-            >
-              Enrolled
-            </button>
-          ) : (
-            <button
-              onClick={handleEnroll}
-              style={{
-                width: "100%",
-                marginTop: 15,
-                padding: 12,
-                background: "#a435f0",
-                border: "none",
-                borderRadius: 6,
-                color: "white",
                 fontWeight: "bold",
                 cursor: "pointer"
               }}
             >
-              Enroll Now
+              Continue Learning
+            </button>
+          ) : (
+            <button
+              onClick={handleEnroll}
+              disabled={isProcessing}
+              style={{
+                width: "100%",
+                marginTop: 15,
+                padding: 12,
+                background: isProcessing ? "#9333ea" : "#a435f0",
+                border: "none",
+                borderRadius: 6,
+                color: "white",
+                fontWeight: "bold",
+                cursor: isProcessing ? "not-allowed" : "pointer",
+                opacity: isProcessing ? 0.7 : 1
+              }}
+            >
+              {isProcessing ? "Processing..." : "Enroll Now"}
             </button>
           )}
 
@@ -239,11 +489,11 @@ const CourseDetail: React.FC = () => {
 
       {/* COURSE CONTENT */}
 
-      <div style={{ padding: 60 }}>
+      <div ref={courseContentRef} style={{ padding: 60 }}>
 
         <h2 style={{ marginBottom: 20 }}>Course Content</h2>
 
-        {modules.map((module) => (
+        {modules.map((module, moduleIndex) => (
 
           <div
             key={module.module_id}
@@ -257,25 +507,29 @@ const CourseDetail: React.FC = () => {
             <div
               style={{
                 padding: 20,
-                cursor: "pointer",
-                background: "#111"
+                cursor: isEnrolled ? "pointer" : "not-allowed",
+                background: "#111",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center"
               }}
-              onClick={() =>
-                setOpenModule(
-                  openModule === module.module_id
-                    ? null
-                    : module.module_id
-                )
-              }
+              onClick={() => {
+                if (isEnrolled) {
+                  toggleModule(module.module_id);
+                } else {
+                  alert("Please enroll in the course to unlock its contents.");
+                }
+              }}
             >
-              <strong>{module.module_title}</strong>
+              <strong>{moduleIndex + 1}. {module.module_title}</strong>
+              {!isEnrolled && <span style={{ color: "#f87171", fontSize: "0.9rem", fontWeight: "bold" }}>🔒 Locked</span>}
             </div>
 
-            {openModule === module.module_id && (
+            {openModules.has(module.module_id) && (
 
-              <ul style={{ padding: 20 }}>
+              <ul style={{ padding: 20, margin: 0, listStyle: "none" }}>
 
-                {module.lectures.map((lecture) => (
+                {module.lectures.map((lecture, lectureIndex) => (
 
                   <li
                     key={lecture.lecture_id}
@@ -286,27 +540,53 @@ const CourseDetail: React.FC = () => {
                     }}
                   >
 
-                    {lecture.title}
+                    <span>{lectureIndex + 1}. {lecture.title}</span>
 
-                    {isEnrolled ? (
-                      <button
-                        onClick={() =>
-                          navigate(`/course/${courseId}/lecture/${lecture.lecture_id}`)
-                        }
-                        style={{
-                          background: "#2563eb",
-                          border: "none",
-                          color: "white",
-                          padding: "6px 10px",
-                          borderRadius: 4,
-                          cursor: "pointer"
-                        }}
-                      >
-                        Watch
-                      </button>
-                    ) : (
-                      <span style={{ color: "#aaa" }}>Preview</span>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {isEnrolled ? (
+                        <button
+                          onClick={() => {
+                            const videoUrl = normalizeVideoUrl(lecture.video_url);
+                            if (videoUrl) {
+                              setSelectedLecture({
+                                lectureId: lecture.lecture_id,
+                                title: lecture.title,
+                                videoUrl
+                              });
+                              return;
+                            }
+                            alert("Video URL not available for this lecture yet.");
+                          }}
+                          style={{
+                            background: "#2563eb",
+                            border: "none",
+                            color: "white",
+                            padding: "6px 10px",
+                            borderRadius: 4,
+                            cursor: "pointer"
+                          }}
+                        >
+                          Watch
+                        </button>
+                      ) : (
+                        <span style={{ color: "#aaa" }}>Preview</span>
+                      )}
+
+                      {isEnrolled && (
+                        <span
+                          title={watchedLectureIds.has(lecture.lecture_id) ? "Watched" : "Left to watch"}
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: watchedLectureIds.has(lecture.lecture_id) ? "#22c55e" : "#ef4444",
+                            minWidth: 14,
+                            textAlign: "center"
+                          }}
+                        >
+                          {watchedLectureIds.has(lecture.lecture_id) ? "✓" : "✗"}
+                        </span>
+                      )}
+                    </div>
 
                   </li>
 
@@ -347,8 +627,78 @@ const CourseDetail: React.FC = () => {
       </div>
 
       <div style={{ padding: 60, borderTop: "1px solid #333" }}>
-    {courseId && <ReviewSection courseId={courseId} />}
-</div>
+        {courseId && <ReviewSection courseId={courseId} />}
+      </div>
+
+      {selectedLecture && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+            padding: 20
+          }}
+          onClick={() => setSelectedLecture(null)}
+        >
+          <div
+            style={{
+              width: "min(980px, 95vw)",
+              background: "#111",
+              border: "1px solid #333",
+              borderRadius: 10,
+              padding: 16
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <strong>{selectedLecture.title}</strong>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => setLectureWatchedState(selectedLecture.lectureId, !watchedLectureIds.has(selectedLecture.lectureId))}
+                  style={{
+                    background: watchedLectureIds.has(selectedLecture.lectureId) ? "#dc2626" : "#16a34a",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "6px 10px",
+                    cursor: "pointer"
+                  }}
+                >
+                  {watchedLectureIds.has(selectedLecture.lectureId) ? "Mark Unwatched" : "Mark Watched"}
+                </button>
+                <button
+                  onClick={() => setSelectedLecture(null)}
+                  style={{ background: "#222", color: "#fff", border: "1px solid #444", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            {getYouTubeEmbedUrl(selectedLecture.videoUrl) ? (
+              <iframe
+                title={selectedLecture.title}
+                src={getYouTubeEmbedUrl(selectedLecture.videoUrl)}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                style={{ width: "100%", aspectRatio: "16 / 9", border: "none", borderRadius: 8 }}
+              />
+            ) : (
+              <video
+                controls
+                src={selectedLecture.videoUrl}
+                onEnded={() => setLectureWatchedState(selectedLecture.lectureId, true)}
+                style={{ width: "100%", borderRadius: 8, maxHeight: "70vh", background: "#000" }}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
 
     </div>

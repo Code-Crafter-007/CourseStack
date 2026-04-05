@@ -5,8 +5,12 @@ import { Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useWishlist } from '../../context/WishlistContext';
 
+interface NavbarProps {
+    searchValue?: string;
+    onSearchChange?: (value: string) => void;
+}
 
-const Navbar: React.FC = () => {
+const Navbar: React.FC<NavbarProps> = ({ searchValue = '', onSearchChange }) => {
     const { currentUser, logout } = useAuth();
     const navigate = useNavigate();
     const { wishlist } = useWishlist(currentUser?.id ?? null);  // ← get wishlist count
@@ -32,13 +36,15 @@ const Navbar: React.FC = () => {
                     type="text"
                     placeholder="Search courses..."
                     className="nav-search"
+                    value={searchValue}
+                    onChange={(e) => onSearchChange?.(e.target.value)}
                 />
             </div>
 
             <div className="nav-right">
-               <a href="#explore" className="nav-link" onClick={(e) => e.preventDefault()}>Explore</a>
-                <a href="#my-learning" className="nav-link" onClick={(e) => e.preventDefault()}>My Learning</a>
-                <a href="#bookmarks" className="nav-link" onClick={(e) => e.preventDefault()}>Bookmarks</a>
+                <Link to="/dashboard#explore" className="nav-link">Explore</Link>
+                <Link to="/dashboard#continue-learning" className="nav-link">My Learning</Link>
+                <Link to="/wishlist" className="nav-link">Bookmarks</Link>
 
                 {/* Wishlist icon with red badge count */}
                 <Link to="/wishlist" className="nav-link" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -69,13 +75,18 @@ const Navbar: React.FC = () => {
                     )}
                 </Link>
 
-               <Link to="/profile" className="nav-avatar" title="Profile">
-    {getInitials(currentUser?.name || '')}
-</Link>
+                <Link to="/profile" className="nav-avatar" title="Profile">
                     {getInitials(currentUser?.name || '')}
-                </div>
-
-            
+                </Link>
+                <button
+                    type="button"
+                    className="nav-link"
+                    onClick={handleLogout}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                    Logout
+                </button>
+            </div>
         </nav>
     );
 };

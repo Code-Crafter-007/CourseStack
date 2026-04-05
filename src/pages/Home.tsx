@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import CourseCard from '../components/course/CourseCard';
@@ -16,6 +16,8 @@ const Home: React.FC = () => {
     const [popularCourses, setPopularCourses] = useState<UICourse[]>([]);
     const [categories, setCategories] = useState<{ name: string; icon: string }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -48,18 +50,56 @@ const Home: React.FC = () => {
     }, [currentUser?.id]);
 
     const totalEnrolled = enrolledCourses.length;
-    // Calculate total progress from all enrolled courses
-    const overallProgress = totalEnrolled > 0 
-        ? Math.round(enrolledCourses.reduce((acc, curr) => acc + (curr.progress || 0), 0) / totalEnrolled) 
+    const totalCompleted = enrolledCourses.reduce(
+        (acc, curr) => acc + (curr.completedLectures || 0),
+        0
+    );
+    const totalLectures = enrolledCourses.reduce(
+        (acc, curr) => acc + (curr.totalLectures || 0),
+        0
+    );
+    const overallProgress = totalLectures > 0
+        ? Math.round((totalCompleted / totalLectures) * 100)
         : 0;
-    
-    // Placeholder for completed logic until we have full progress tracking
-    const totalCompleted = 0; 
+
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const matchesCourse = (course: { title: string; instructor?: string }) => {
+        if (!normalizedQuery) return true;
+        return (
+            course.title.toLowerCase().includes(normalizedQuery) ||
+            (course.instructor || '').toLowerCase().includes(normalizedQuery)
+        );
+    };
+
+    const matchesCategory = (course: { category?: string }) => {
+        if (!selectedCategory) return true;
+        return (course.category || '').toLowerCase() === selectedCategory.toLowerCase();
+    };
+
+    const filteredEnrolledCourses = useMemo(
+        () => enrolledCourses.filter((course) => matchesCourse(course) && matchesCategory(course)),
+        [enrolledCourses, normalizedQuery, selectedCategory]
+    );
+
+    const filteredRecommendedCourses = useMemo(
+        () => recommendedCourses.filter((course) => matchesCourse(course) && matchesCategory(course)),
+        [recommendedCourses, normalizedQuery, selectedCategory]
+    );
+
+    const filteredPopularCourses = useMemo(
+        () => popularCourses.filter((course) => matchesCourse(course) && matchesCategory(course)),
+        [popularCourses, normalizedQuery, selectedCategory]
+    );
+
+    const hasSearchResults =
+        filteredEnrolledCourses.length > 0 ||
+        filteredRecommendedCourses.length > 0 ||
+        filteredPopularCourses.length > 0;
 
     if (isLoading) {
         return (
             <div className="home-container">
-                <Navbar />
+                <Navbar searchValue={searchQuery} onSearchChange={setSearchQuery} />
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: 'white' }}>
                     <h2>Loading dashboard...</h2>
                 </div>
@@ -70,7 +110,7 @@ const Home: React.FC = () => {
 
     return (
         <div className="home-container">
-            <Navbar />
+            <Navbar searchValue={searchQuery} onSearchChange={setSearchQuery} />
 
             <div className="home-content">
                 {/* Hero / Welcome */}
@@ -93,6 +133,7 @@ const Home: React.FC = () => {
                             <div className="stat-box">
                                 <div className="stat-label">Overall Progress</div>
                                 <div className="stat-value">{overallProgress}%</div>
+                                <div className="stat-label">{totalCompleted} / {totalLectures} lectures watched</div>
                                 <div className="progress-bar-bg" style={{ marginTop: '8px' }}>
                                     <div className="progress-bar-fill" style={{ width: `${overallProgress}%` }}></div>
                                 </div>
@@ -102,16 +143,26 @@ const Home: React.FC = () => {
                 </div>
 
                 {/* Continue Learning */}
-                {enrolledCourses.length > 0 && (
-                    <ContinueLearning courses={enrolledCourses} />
+                {filteredEnrolledCourses.length > 0 && (
+                    <div id="continue-learning">
+                        <ContinueLearning courses={filteredEnrolledCourses} />
+                    </div>
+                )}
+
+                {normalizedQuery && !hasSearchResults && (
+                    <div className="section-container">
+                        <p style={{ color: '#aaa' }}>
+                            No courses found for "{searchQuery}".
+                        </p>
+                    </div>
                 )}
 
                 {/* Recommended */}
-                <div className="section-container">
+                <div className="section-container" id="explore">
                     <h2 className="section-title">Recommended for You</h2>
-                    {recommendedCourses.length > 0 ? (
+                    {filteredRecommendedCourses.length > 0 ? (
                         <div className="course-grid">
-                            {recommendedCourses.map(course => (
+                            {filteredRecommendedCourses.map(course => (
                                 <CourseCard key={course.id} course={course} />
                             ))}
                         </div>
@@ -123,9 +174,9 @@ const Home: React.FC = () => {
                 {/* Popular Trending */}
                 <div className="section-container">
                     <h2 className="section-title">🔥 Popular Courses</h2>
-                    {popularCourses.length > 0 ? (
+                    {filteredPopularCourses.length > 0 ? (
                         <div className="course-grid">
-                            {popularCourses.map(course => (
+                            {filteredPopularCourses.map(course => (
                                 <CourseCard key={course.id + '-popular'} course={course} />
                             ))}
                         </div>
@@ -137,10 +188,29 @@ const Home: React.FC = () => {
                 {/* Categories */}
                 <div className="section-container">
                     <h2 className="section-title">Top Categories</h2>
+                    {selectedCategory && (
+                        <p style={{ color: '#aaa', marginTop: '-10px', marginBottom: '16px' }}>
+                            Filtering by: <strong>{selectedCategory}</strong>{' '}
+                            <button
+                                type='button'
+                                className='nav-link'
+                                style={{ border: 'none', background: 'none', padding: 0, marginLeft: '8px' }}
+                                onClick={() => setSelectedCategory(null)}
+                            >
+                                Clear
+                            </button>
+                        </p>
+                    )}
                     {categories.length > 0 ? (
                         <div className="categories-grid">
                             {categories.map((cat, idx) => (
-                                <div key={idx} className="glass-card category-card">
+                                <div
+                                    key={idx}
+                                    className={`glass-card category-card${selectedCategory === cat.name ? ' active' : ''}`}
+                                    onClick={() => setSelectedCategory((prev) => (prev === cat.name ? null : cat.name))}
+                                    role='button'
+                                    aria-label={`Filter by ${cat.name}`}
+                                >
                                     <span className="category-icon">{cat.icon}</span>
                                     <div className="category-name">{cat.name}</div>
                                 </div>
